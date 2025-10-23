@@ -121,7 +121,7 @@ class ScrapingJob(Base):
     completed_at = Column(DateTime)
     error_message = Column(Text)
 
-    metadata = Column(JSON)
+    job_metadata = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy conflict
 
     def __repr__(self):
         return f"<ScrapingJob(site='{self.site}', status='{self.status}')>"
