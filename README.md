@@ -1,20 +1,46 @@
-# Luxury AI Search Interface
+# Luxury AI Search & Anti-Counterfeit Detection Platform
 
-Interface de recherche alimentée par l'IA pour produits de luxe avec recherche par mots-clés et recherche par similarité d'images.
+Plateforme complète alimentée par l'IA pour la recherche de produits de luxe et la détection automatique de contrefaçons.
+
+## 🎯 Vue d'Ensemble
+
+Ce projet propose **TROIS solutions principales** :
+
+### 🛡️ **NOUVEAU : Système de Détection de Contrefaçons**
+**Le système le plus important et le plus avancé !**
+- **Web Scraping** automatique des sites e-commerce (AliExpress, DHgate, Wish, Temu...)
+- **Détection AI** multi-critères des contrefaçons
+- **Dashboard de monitoring** en temps réel
+- **Alertes automatiques** et rapports
+- **Base de données** complète des détections
+- 📖 **[Documentation complète](counterfeit_detection/README.md)**
+
+---
 
 ## 🏗️ Architecture
 
-Ce projet propose **deux solutions** :
+Le projet propose **trois systèmes** :
 
-### 1. **Streamlit MVP** (Démo Rapide)
+### 1. **🛡️ Système Anti-Contrefaçon** (Principal - NOUVEAU!)
+- **Scraping multi-sites** : AliExpress, DHgate, Wish, Temu, etc.
+- **Détection IA** : Similarité d'images + matching mots-clés + analyse de prix
+- **Dashboard Streamlit** avancé avec analytics
+- **Base de données SQLite** pour stocker les détections
+- **Alertes en temps réel** (email, webhooks)
+- **Rapports automatisés** et exports
+- 📂 Dossier: `counterfeit_detection/`
+
+### 2. **Streamlit MVP** (Recherche de Produits)
 - Interface tout-en-un pour validation rapide
 - Cache natif des modèles PyTorch
 - Parfait pour présentation client
+- 📂 Dossier: `streamlit_app/`
 
-### 2. **FastAPI + React** (Production)
+### 3. **FastAPI + React** (Recherche Production)
 - Backend API scalable avec Redis
 - Frontend moderne et élégant
 - Architecture microservices
+- 📂 Dossiers: `backend/` + `frontend/`
 
 ---
 
@@ -22,12 +48,28 @@ Ce projet propose **deux solutions** :
 
 ```
 Web-Scrapping/
-├── streamlit_app/          # Application Streamlit MVP
+├── counterfeit_detection/  # 🛡️ SYSTÈME ANTI-CONTREFAÇON (PRINCIPAL)
+│   ├── database/
+│   │   ├── models.py           # Schéma BDD (SQLAlchemy)
+│   │   └── counterfeit_detection.db  # Base de données
+│   ├── scrapers/
+│   │   ├── base_scraper.py     # Classe de base
+│   │   ├── aliexpress_scraper.py
+│   │   └── dhgate_scraper.py
+│   ├── detectors/
+│   │   └── counterfeit_detector.py  # Moteur de détection AI
+│   ├── dashboard.py            # Dashboard Streamlit avancé
+│   ├── demo.py                 # Script de démonstration
+│   ├── requirements.txt
+│   └── README.md               # Documentation complète
+│
+├── streamlit_app/          # Application Streamlit MVP (Recherche)
 │   ├── app.py             # Interface principale
+│   ├── app_demo.py        # Version démo sans PyTorch
 │   ├── models/            # Gestionnaire de modèles
 │   └── utils/             # Utilitaires
 │
-├── backend/               # API FastAPI
+├── backend/               # API FastAPI (Recherche)
 │   ├── app/
 │   │   ├── main.py       # Point d'entrée FastAPI
 │   │   ├── models/       # Gestion modèles PyTorch
@@ -36,7 +78,7 @@ Web-Scrapping/
 │   │   └── schemas/      # Modèles Pydantic
 │   └── requirements.txt
 │
-├── frontend/              # Application React
+├── frontend/              # Application React (Recherche)
 │   ├── src/
 │   │   ├── components/   # Composants React
 │   │   ├── pages/        # Pages
@@ -61,7 +103,33 @@ Web-Scrapping/
 
 ## 🚀 Quick Start
 
-### Option 1: Streamlit MVP
+### 🛡️ Option 1: Système Anti-Contrefaçon (RECOMMANDÉ)
+
+```bash
+# Installer les dépendances
+cd counterfeit_detection
+pip install -r requirements.txt
+
+# Lancer le dashboard
+streamlit run dashboard.py
+
+# Ou tester la démo
+python demo.py
+```
+
+**Accès:** http://localhost:8501
+
+**Fonctionnalités:**
+1. **Nouveau Scan** : Rechercher des contrefaçons sur AliExpress, DHgate, etc.
+2. **Dashboard** : Visualiser les détections en temps réel
+3. **Analytics** : Rapports et tendances
+4. **Configuration** : Gérer les marques surveillées
+
+📖 **Documentation complète:** [counterfeit_detection/README.md](counterfeit_detection/README.md)
+
+---
+
+### Option 2: Streamlit MVP (Recherche)
 
 ```bash
 # Installer les dépendances
@@ -76,7 +144,7 @@ cd streamlit_app
 streamlit run app.py
 ```
 
-### Option 2: FastAPI + React (Production)
+### Option 3: FastAPI + React (Production)
 
 ```bash
 # Avec Docker (Recommandé)
