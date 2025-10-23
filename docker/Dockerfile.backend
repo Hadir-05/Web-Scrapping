@@ -1,0 +1,44 @@
+# Dockerfile pour le backend FastAPI
+
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="Luxury AI Search Team"
+LABEL description="Backend FastAPI pour Luxury AI Search"
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Répertoire de travail
+WORKDIR /app
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier les requirements
+COPY backend/requirements.txt .
+
+# Installer les dépendances Python
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copier le code de l'application
+COPY backend/app ./app
+COPY models ./models
+
+# Exposer le port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+
+# Commande de démarrage
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
