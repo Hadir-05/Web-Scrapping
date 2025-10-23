@@ -107,7 +107,7 @@ def initialize_session_state():
 def render_sidebar():
     """Barre latérale avec navigation"""
     with st.sidebar:
-        st.image("https://via.placeholder.com/200x80/2C3E50/FFFFFF?text=ANTI-COUNTERFEIT", use_container_width=True)
+        st.image("https://via.placeholder.com/200x80/2C3E50/FFFFFF?text=ANTI-COUNTERFEIT", use_column_width=True)
         st.markdown("---")
 
         st.markdown("### 🎯 Navigation")
@@ -224,7 +224,7 @@ def render_detections_by_site_chart(stats):
         margin=dict(l=0, r=0, t=0, b=0)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_column_width=True)
 
 
 def render_risk_distribution_chart():
@@ -252,7 +252,7 @@ def render_risk_distribution_chart():
         margin=dict(l=0, r=0, t=0, b=0)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_column_width=True)
 
 
 def render_recent_detections():
@@ -273,7 +273,7 @@ def render_recent_detections():
 
             with col1:
                 if counterfeit.image_urls:
-                    st.image(counterfeit.image_urls[0], use_container_width=True)
+                    st.image(counterfeit.image_urls[0], use_column_width=True)
 
             with col2:
                 risk_color = "🔴" if counterfeit.overall_risk_score >= 0.85 else "🟠"
@@ -321,7 +321,7 @@ def render_new_scan():
 
     st.markdown("---")
 
-    if st.button("🚀 Start Scan", type="primary", use_container_width=True):
+    if st.button("🚀 Start Scan", type="primary"):
         if not query:
             st.error("Please enter a search query")
             return
@@ -449,7 +449,7 @@ def render_detections_list():
             })
 
         df = pd.DataFrame(data)
-        st.dataframe(df, use_container_width=True, height=600)
+        st.dataframe(df, use_column_width=True, height=600)
     else:
         st.info("No detections found with the selected filters.")
 
@@ -549,7 +549,7 @@ def render_timeline_chart():
         yaxis_title="Detections"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_column_width=True)
 
 
 def render_top_brands_chart():
@@ -562,7 +562,7 @@ def render_top_brands_chart():
     fig = px.bar(data, x='Count', y='Brand', orientation='h', color='Count', color_continuous_scale='Reds')
     fig.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_column_width=True)
 
 
 def render_price_distribution_chart():
@@ -576,7 +576,7 @@ def render_price_distribution_chart():
     fig.update_xaxes(title="Price ($)")
     fig.update_yaxes(title="Count")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_column_width=True)
 
 
 def main():
