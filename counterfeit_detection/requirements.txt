@@ -4,31 +4,24 @@ beautifulsoup4==4.12.2
 selenium==4.15.2
 lxml==4.9.3
 
-# Database
+# Database (compatible Python 3.8)
 sqlalchemy==2.0.23
 
-# Data Processing
-pandas==2.2.0
-numpy==1.26.3
+# Data Processing (compatible Python 3.8)
+pandas==2.0.3
+numpy==1.24.4
 
 # Visualization & Dashboard
-streamlit==1.31.0
-plotly==5.18.0
+streamlit==1.28.0
+plotly==5.17.0
 
 # Image Processing (for AI models)
-pillow==10.2.0
-opencv-python==4.9.0.80
-
-# AI/ML (optional, si vous utilisez vos modèles)
-# torch==2.1.2
-# torchvision==0.16.2
+pillow==10.0.1
+opencv-python==4.8.1.78
 
 # Utilities
 python-dotenv==1.0.0
 schedule==1.2.0
-
-# Email alerts
-smtplib2==0.1.1
 
 # Logging
 loguru==0.7.2
