@@ -109,7 +109,7 @@ def display_product_card(product: dict):
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        st.image(product["image_url"], use_container_width=True)
+        st.image(product["image_url"], use_column_width=True)
 
     with col2:
         st.markdown(f"### {product['name']}")
@@ -128,7 +128,7 @@ def display_product_card(product: dict):
 def render_sidebar():
     """Affiche la barre latérale"""
     with st.sidebar:
-        st.image("https://via.placeholder.com/200x80/000000/D4AF37?text=LUXURY+BRAND", use_container_width=True)
+        st.image("https://via.placeholder.com/200x80/000000/D4AF37?text=LUXURY+BRAND", use_column_width=True)
         st.markdown("---")
 
         st.markdown("### 🎯 Mode de Recherche")
@@ -175,7 +175,7 @@ def render_keyword_search(max_results: int):
         )
 
     with col2:
-        search_button = st.button("🔍 Rechercher", use_container_width=True)
+        search_button = st.button("🔍 Rechercher")
 
     if search_button and query:
         with st.spinner("🔍 Recherche en cours..."):
@@ -207,13 +207,13 @@ def render_image_search(max_results: int):
 
         with col1:
             image = Image.open(uploaded_file)
-            st.image(image, caption="Votre image", use_container_width=True)
+            st.image(image, caption="Votre image", use_column_width=True)
 
         with col2:
             st.markdown("### 📊 Analyse")
             st.info("Mode DÉMO : Résultats simulés")
 
-            if st.button("🔍 Rechercher des produits similaires", use_container_width=True):
+            if st.button("🔍 Rechercher des produits similaires"):
                 with st.spinner("🖼️ Analyse de l'image..."):
                     results = generate_mock_results("image similaire", max_results)
                     st.session_state['search_results'] = results
