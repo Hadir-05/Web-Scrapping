@@ -19,27 +19,29 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Initialiser les flags de disponibilité
+CLIP_AVAILABLE = False
+PHASH_AVAILABLE = False
+ORB_AVAILABLE = False
+
 # Tentative d'import des librairies
 try:
     import torch
     import clip
     CLIP_AVAILABLE = True
 except ImportError:
-    CLIP_AVAILABLE = False
     logger.warning("CLIP non disponible. Installez avec: pip install git+https://github.com/openai/CLIP.git")
 
 try:
     import imagehash
     PHASH_AVAILABLE = True
 except ImportError:
-    PHASH_AVAILABLE = False
     logger.warning("imagehash non disponible. Installez avec: pip install imagehash")
 
 try:
     import cv2
     ORB_AVAILABLE = True
 except ImportError:
-    ORB_AVAILABLE = False
     logger.warning("OpenCV non disponible. Installez avec: pip install opencv-python")
 
 
