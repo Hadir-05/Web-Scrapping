@@ -19,7 +19,17 @@ plotly==5.17.0
 torch==1.13.1
 torchvision==0.14.1
 
-# Image Processing
+# Advanced Image Similarity (CLIP + pHash + ORB)
+# CLIP: Modèle sémantique pour comprendre les images de produits
+git+https://github.com/openai/CLIP.git
+# pHash: Perceptual hashing pour détecter images quasi-identiques
+imagehash==4.3.1
+# ftfy: Dependency pour CLIP
+ftfy==6.1.1
+# regex: Dependency pour CLIP
+regex==2023.10.3
+
+# Image Processing (OpenCV fournit ORB pour features géométriques)
 pillow==10.0.1
 opencv-python==4.8.1.78
 

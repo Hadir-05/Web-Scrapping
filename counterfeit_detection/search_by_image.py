@@ -29,7 +29,17 @@ sys.path.append(str(Path(__file__).parent))
 
 from scrapers.aliexpress_scraper import AliExpressScraper
 from scrapers.dhgate_scraper import DHgateScraper
+
+# Essayer d'importer le modèle avancé en priorité
+try:
+    from detectors.advanced_image_similarity import create_advanced_similarity_model
+    ADVANCED_MODEL_AVAILABLE = True
+except ImportError:
+    ADVANCED_MODEL_AVAILABLE = False
+
+# Fallback sur l'ancien modèle
 from detectors.image_similarity_model import create_image_similarity_model
+
 import logging
 
 # Configuration du logging
@@ -43,17 +53,27 @@ logger = logging.getLogger(__name__)
 class ImageSearchEngine:
     """Moteur de recherche par image pour détecter les contrefaçons"""
 
-    def __init__(self, device='cpu'):
+    def __init__(self, device='cpu', use_advanced=True):
         """
         Initialise le moteur de recherche
 
         Args:
             device: 'cpu' ou 'cuda' pour GPU
+            use_advanced: Si True, utilise le modèle avancé (CLIP+pHash+ORB)
         """
         logger.info("🔄 Initializing Image Search Engine...")
 
         # Charger le modèle de similarité d'images
-        self.similarity_model = create_image_similarity_model(device=device)
+        if use_advanced and ADVANCED_MODEL_AVAILABLE:
+            logger.info("🚀 Using ADVANCED similarity model (CLIP + pHash + ORB)")
+            self.similarity_model = create_advanced_similarity_model(device=device)
+            self.model_type = "advanced"
+        else:
+            if use_advanced:
+                logger.warning("⚠️  Advanced model not available, falling back to ResNet50")
+            logger.info("📊 Using standard similarity model (ResNet50)")
+            self.similarity_model = create_image_similarity_model(device=device)
+            self.model_type = "standard"
 
         if self.similarity_model is None:
             raise RuntimeError("Failed to load image similarity model")
@@ -64,7 +84,7 @@ class ImageSearchEngine:
             'dhgate': DHgateScraper()
         }
 
-        logger.info("✅ Image Search Engine initialized!")
+        logger.info(f"✅ Image Search Engine initialized! (model: {self.model_type})")
 
     def search_products(
         self,
@@ -296,6 +316,13 @@ pas par nom de marque! Utilisez des termes génériques pour de meilleurs résul
         help='Device pour le modèle AI (défaut: cpu)'
     )
 
+    parser.add_argument(
+        '--model',
+        choices=['advanced', 'standard'],
+        default='advanced',
+        help='Type de modèle: advanced (CLIP+pHash+ORB, RECOMMANDÉ) ou standard (ResNet50)'
+    )
+
     args = parser.parse_args()
 
     print()
@@ -310,7 +337,8 @@ pas par nom de marque! Utilisez des termes génériques pour de meilleurs résul
 
     try:
         # Créer le moteur de recherche
-        engine = ImageSearchEngine(device=args.device)
+        use_advanced = (args.model == 'advanced')
+        engine = ImageSearchEngine(device=args.device, use_advanced=use_advanced)
 
         # Si aucun terme de recherche n'est fourni, utiliser un terme générique
         search_query = args.query
