@@ -3,13 +3,20 @@ Moteur de recherche par image pour détecter les contrefaçons
 
 USAGE:
 ------
-python search_by_image.py /chemin/vers/image_reference.jpg "Hermès Birkin" --site aliexpress --top 5
+python search_by_image.py /chemin/vers/image_reference.jpg "handbag" --site aliexpress --top 5
+
+⚠️  IMPORTANT: Utilisez des termes GÉNÉRIQUES (bag, watch, shoes, etc.)
+              PAS de noms de marque (Hermès, Rolex, etc.)
 
 Ce script:
-1. Prend une image de référence (produit authentique)
-2. Scrape le site spécifié (AliExpress, DHgate, etc.)
-3. Compare l'image de référence avec toutes les images des annonces
-4. Affiche le TOP N des annonces les plus similaires
+1. Prend une image de référence (votre produit)
+2. Scrape le site avec un terme GÉNÉRIQUE (AliExpress, DHgate, etc.)
+3. Compare votre image avec TOUTES les images des annonces trouvées
+4. Classe les résultats 100% par SIMILARITÉ D'IMAGE (IA ResNet50)
+5. Affiche le TOP N des annonces les plus similaires visuellement
+
+Le classement est basé UNIQUEMENT sur l'apparence visuelle des produits,
+PAS sur les noms de marque ou les descriptions textuelles.
 """
 import sys
 import os
@@ -89,7 +96,8 @@ class ImageSearchEngine:
             raise ValueError(f"Site non supporté: {site}. Utilisez: {list(self.scrapers.keys())}")
 
         logger.info(f"📸 Image de référence: {reference_image_path}")
-        logger.info(f"🔍 Recherche: '{search_query}' sur {site.upper()}")
+        logger.info(f"🔍 Recherche avec terme générique: '{search_query}' sur {site.upper()}")
+        logger.info(f"🎯 Détection: 100% basée sur la SIMILARITÉ D'IMAGE (pas le nom de marque)")
         logger.info(f"📊 Scraping jusqu'à {max_pages} pages...")
 
         # Scraper le site
@@ -158,6 +166,7 @@ class ImageSearchEngine:
 
         print("\n" + "=" * 80)
         print(f"🏆 TOP {len(results)} ANNONCES LES PLUS SIMILAIRES")
+        print(f"    (Classement 100% basé sur la similarité d'IMAGE, pas le nom)")
         print("=" * 80)
         print()
 
@@ -226,15 +235,22 @@ def main():
         description='Moteur de recherche par image pour détecter les contrefaçons',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Exemples:
-  # Rechercher sur AliExpress et afficher le TOP 5 (3 pages ≈ 30-60 produits)
-  python search_by_image.py /path/to/hermes_birkin.jpg "Hermès Birkin" --site aliexpress --top 5
+Exemples (UTILISEZ DES TERMES GÉNÉRIQUES, PAS DE NOMS DE MARQUE):
 
-  # Rechercher sur DHgate avec plus de résultats (10 pages ≈ 100-200 produits)
-  python search_by_image.py /path/to/rolex.jpg "Rolex Submariner" --site dhgate --pages 10 --top 10
+  # Chercher des sacs similaires (sans spécifier la marque)
+  python search_by_image.py /path/to/my_bag.jpg "handbag" --top 5
 
-  # Recherche rapide (1 page ≈ 10-20 produits)
-  python search_by_image.py /path/to/product.jpg "luxury bag" --pages 1 --top 3
+  # Chercher des montres similaires sur DHgate
+  python search_by_image.py /path/to/my_watch.jpg "watch" --site dhgate --pages 10 --top 10
+
+  # Chercher des chaussures similaires (recherche rapide)
+  python search_by_image.py /path/to/my_shoes.jpg "shoes" --pages 1 --top 3
+
+  # Sans terme de recherche (utilise automatiquement "luxury product")
+  python search_by_image.py /path/to/product.jpg --pages 5 --top 5
+
+IMPORTANT: Le système trouve les produits similaires uniquement par IMAGE,
+pas par nom de marque! Utilisez des termes génériques pour de meilleurs résultats.
         """
     )
 
@@ -245,7 +261,11 @@ Exemples:
 
     parser.add_argument(
         'query',
-        help='Terme de recherche (ex: "Hermès Birkin", "Rolex Submariner")'
+        nargs='?',
+        default=None,
+        help='Terme de recherche GÉNÉRIQUE (ex: "bag", "handbag", "watch", "shoes"). '
+             'Utilisez des termes génériques pour trouver tous les produits similaires, '
+             'pas des noms de marque. Si omis, utilise "luxury product"'
     )
 
     parser.add_argument(
@@ -282,7 +302,8 @@ Exemples:
     print("🛡️ " * 20)
     print()
     print("   MOTEUR DE RECHERCHE PAR IMAGE")
-    print("   Détection de contrefaçons par similarité d'images")
+    print("   Détection 100% basée sur la SIMILARITÉ D'IMAGE")
+    print("   (Pas de détection par nom de marque)")
     print()
     print("🛡️ " * 20)
     print()
@@ -291,10 +312,19 @@ Exemples:
         # Créer le moteur de recherche
         engine = ImageSearchEngine(device=args.device)
 
+        # Si aucun terme de recherche n'est fourni, utiliser un terme générique
+        search_query = args.query
+        if not search_query:
+            search_query = "luxury product"
+            print("ℹ️  Aucun terme de recherche spécifié, utilisation de 'luxury product'")
+            print("   💡 Conseil: Utilisez des termes GÉNÉRIQUES comme 'bag', 'watch', 'shoes'")
+            print("   ❌ Évitez les noms de marque comme 'Hermès', 'Rolex', etc.")
+            print()
+
         # Lancer la recherche
         results = engine.search_products(
             reference_image_path=args.image,
-            search_query=args.query,
+            search_query=search_query,
             site=args.site,
             max_pages=args.pages,
             top_n=args.top
