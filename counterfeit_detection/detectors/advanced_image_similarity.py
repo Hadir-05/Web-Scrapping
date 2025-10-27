@@ -96,7 +96,7 @@ class AdvancedImageSimilarity:
                 logger.info("   ✅ CLIP loaded successfully")
             except Exception as e:
                 logger.error(f"   ❌ Failed to load CLIP: {e}")
-                CLIP_AVAILABLE = False
+                # Ne pas modifier la variable globale ici
 
         # Initialiser ORB
         self.orb = None
