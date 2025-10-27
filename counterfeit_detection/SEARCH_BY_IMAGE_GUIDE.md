@@ -26,16 +26,16 @@ python search_by_image.py <image_reference> "<recherche>" --site <aliexpress|dhg
 
 ### Exemples
 
-**1. Recherche simple (TOP 5 sur AliExpress)**
+**1. Recherche simple (TOP 5 sur AliExpress, 3 pages ≈ 30-60 produits)**
 
 ```bash
 python search_by_image.py ~/Downloads/hermes_birkin.jpg "Hermès Birkin"
 ```
 
-**2. Recherche approfondie (TOP 10 parmi 50 annonces)**
+**2. Recherche approfondie (TOP 10 sur 10 pages ≈ 100-200 produits)**
 
 ```bash
-python search_by_image.py ~/Downloads/rolex.jpg "Rolex Submariner" --max 50 --top 10
+python search_by_image.py ~/Downloads/rolex.jpg "Rolex Submariner" --pages 10 --top 10
 ```
 
 **3. Recherche sur DHgate**
@@ -44,10 +44,10 @@ python search_by_image.py ~/Downloads/rolex.jpg "Rolex Submariner" --max 50 --to
 python search_by_image.py ~/Downloads/louis_vuitton.jpg "Louis Vuitton bag" --site dhgate --top 5
 ```
 
-**4. Recherche rapide (10 annonces seulement)**
+**4. Recherche rapide (1 page ≈ 10-20 produits)**
 
 ```bash
-python search_by_image.py ~/Downloads/product.jpg "luxury handbag" --max 10 --top 3
+python search_by_image.py ~/Downloads/product.jpg "luxury handbag" --pages 1 --top 3
 ```
 
 ## Paramètres
@@ -57,7 +57,7 @@ python search_by_image.py ~/Downloads/product.jpg "luxury handbag" --max 10 --to
 | `image` | Chemin vers votre image de référence | **Requis** |
 | `query` | Terme de recherche (entre guillemets) | **Requis** |
 | `--site` | Site à scraper (`aliexpress` ou `dhgate`) | `aliexpress` |
-| `--max` | Nombre d'annonces à scraper | `20` |
+| `--pages` | Nombre de pages à scraper (1 page ≈ 10-20 produits) | `3` |
 | `--top` | Nombre de résultats à afficher | `5` |
 | `--device` | Device AI (`cpu` ou `cuda`) | `cpu` |
 
@@ -169,8 +169,8 @@ python search_by_image.py ~/Downloads/authentic_product.jpg "luxury brand produc
 ### 1. Surveillance de marque
 
 ```bash
-# Surveiller les contrefaçons d'un produit spécifique
-python search_by_image.py products/birkin30_orange.jpg "Hermès Birkin 30" --max 100 --top 20
+# Surveiller les contrefaçons d'un produit spécifique (20 pages ≈ 200-400 produits)
+python search_by_image.py products/birkin30_orange.jpg "Hermès Birkin 30" --pages 20 --top 20
 ```
 
 ### 2. Analyse concurrentielle
@@ -183,17 +183,17 @@ python search_by_image.py my_product.jpg "leather handbag" --site dhgate
 ### 3. Détection rapide
 
 ```bash
-# Check rapide (10 annonces)
-python search_by_image.py product.jpg "luxury bag" --max 10 --top 3
+# Check rapide (1 page ≈ 10-20 produits)
+python search_by_image.py product.jpg "luxury bag" --pages 1 --top 3
 ```
 
 ## Performance
 
 - **Première utilisation**: ~2-3 minutes (téléchargement du modèle ResNet50)
 - **Utilisations suivantes**:
-  - ~5-10 secondes pour 20 annonces
-  - ~20-30 secondes pour 50 annonces
-  - ~1 minute pour 100 annonces
+  - ~10-20 secondes pour 1-3 pages (10-60 produits)
+  - ~30-60 secondes pour 5-10 pages (50-200 produits)
+  - ~2-3 minutes pour 20+ pages (200+ produits)
 
 ## Limitations
 
@@ -217,8 +217,8 @@ pip install torch==1.13.1 torchvision==0.14.1
 ### Erreur de scraping
 
 ```bash
-# Tester avec moins de résultats
-python search_by_image.py image.jpg "query" --max 5
+# Tester avec moins de pages (1 page ≈ 10-20 produits)
+python search_by_image.py image.jpg "query" --pages 1
 
 # Essayer l'autre site
 python search_by_image.py image.jpg "query" --site dhgate
