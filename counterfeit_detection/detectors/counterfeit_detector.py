@@ -8,17 +8,42 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Import du modèle de similarité d'images
+try:
+    from .image_similarity_model import create_image_similarity_model
+    IMAGE_MODEL_AVAILABLE = True
+except ImportError:
+    IMAGE_MODEL_AVAILABLE = False
+    logger.warning("Image similarity model not available")
+
 
 class CounterfeitDetector:
     """Système de détection de contrefaçons multi-critères"""
 
-    def __init__(self, image_model=None, keyword_model=None):
+    def __init__(self, image_model=None, keyword_model=None, device='cpu', use_pretrained=True):
         """
         Args:
-            image_model: Modèle PyTorch pour similarité d'images
-            keyword_model: Modèle PyTorch pour matching de mots-clés
+            image_model: Modèle PyTorch personnalisé pour similarité d'images (optionnel)
+            keyword_model: Modèle PyTorch pour matching de mots-clés (optionnel)
+            device: 'cpu' ou 'cuda'
+            use_pretrained: Utiliser le modèle ResNet pré-entraîné (recommandé)
         """
-        self.image_model = image_model
+        # Modèle d'images
+        if image_model is not None:
+            # Utiliser le modèle personnalisé fourni
+            self.image_model = image_model
+        elif use_pretrained and IMAGE_MODEL_AVAILABLE:
+            # Créer le modèle pré-entraîné
+            logger.info("🔄 Loading pre-trained image similarity model...")
+            self.image_model = create_image_similarity_model(device=device)
+            if self.image_model:
+                logger.info("✅ Pre-trained image model loaded successfully!")
+            else:
+                logger.warning("⚠️ Failed to load pre-trained model")
+                self.image_model = None
+        else:
+            self.image_model = None
+
         self.keyword_model = keyword_model
 
         # Marques de luxe à détecter
@@ -198,21 +223,35 @@ class CounterfeitDetector:
         """
         Calcule la similarité entre les images
 
-        NOTE: Cette méthode nécessite le modèle PyTorch
-        Pour l'instant, retourne un score simulé
+        Args:
+            scraped_images: URLs des images scrapées
+            authentic_images: URLs des images authentiques
+
+        Returns:
+            Score de similarité (0-1)
         """
         if not scraped_images or not authentic_images:
             return 0.0
 
-        # PLACEHOLDER: Utiliser votre modèle PyTorch ici
-        # model = self.image_model
-        # scraped_features = model.extract_features(scraped_images[0])
-        # auth_features = model.extract_features(authentic_images[0])
-        # similarity = cosine_similarity(scraped_features, auth_features)
+        # Vérifier si le modèle est disponible
+        if self.image_model is None:
+            logger.warning("Image model not available, using placeholder score")
+            return 0.5
 
-        # Pour la démo, retourne un score basique
-        logger.warning("Image similarity model not implemented, using placeholder")
-        return 0.5  # Score neutre
+        try:
+            # Utiliser la première image de chaque liste
+            scraped_img = scraped_images[0]
+            authentic_img = authentic_images[0]
+
+            # Calculer la similarité avec le modèle
+            similarity = self.image_model.compute_similarity(scraped_img, authentic_img)
+
+            logger.info(f"✅ Image similarity computed: {similarity:.2%}")
+            return similarity
+
+        except Exception as e:
+            logger.error(f"Error computing image similarity: {str(e)}")
+            return 0.0
 
     def _price_analysis(self, scraped_price: float, official_price: float) -> float:
         """

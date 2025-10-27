@@ -15,7 +15,11 @@ numpy==1.24.4
 streamlit==1.28.0
 plotly==5.17.0
 
-# Image Processing (for AI models)
+# AI/ML Models (for image similarity - compatible Python 3.8)
+torch==1.13.1
+torchvision==0.14.1
+
+# Image Processing
 pillow==10.0.1
 opencv-python==4.8.1.78
 
