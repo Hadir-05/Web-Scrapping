@@ -59,12 +59,12 @@ class ImageSearchEngine:
 
         logger.info("✅ Image Search Engine initialized!")
 
-    def search(
+    def search_products(
         self,
         reference_image_path: str,
         search_query: str,
         site: str = 'aliexpress',
-        max_results: int = 20,
+        max_pages: int = 3,
         top_n: int = 5
     ) -> List[Dict]:
         """
@@ -74,7 +74,7 @@ class ImageSearchEngine:
             reference_image_path: Chemin vers l'image de référence
             search_query: Terme de recherche (ex: "Hermès Birkin")
             site: Site à scraper ('aliexpress' ou 'dhgate')
-            max_results: Nombre maximum de résultats à scraper
+            max_pages: Nombre maximum de pages à scraper (1 page ≈ 10-20 produits)
             top_n: Nombre de résultats les plus similaires à retourner
 
         Returns:
@@ -90,11 +90,11 @@ class ImageSearchEngine:
 
         logger.info(f"📸 Image de référence: {reference_image_path}")
         logger.info(f"🔍 Recherche: '{search_query}' sur {site.upper()}")
-        logger.info(f"📊 Scraping jusqu'à {max_results} annonces...")
+        logger.info(f"📊 Scraping jusqu'à {max_pages} pages...")
 
         # Scraper le site
         scraper = self.scrapers[site]
-        scraped_products = scraper.scrape(search_query, max_results=max_results)
+        scraped_products = scraper.search(search_query, max_pages=max_pages)
 
         if not scraped_products:
             logger.warning("❌ Aucune annonce trouvée!")
@@ -227,14 +227,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemples:
-  # Rechercher sur AliExpress et afficher le TOP 5
+  # Rechercher sur AliExpress et afficher le TOP 5 (3 pages ≈ 30-60 produits)
   python search_by_image.py /path/to/hermes_birkin.jpg "Hermès Birkin" --site aliexpress --top 5
 
-  # Rechercher sur DHgate avec plus de résultats
-  python search_by_image.py /path/to/rolex.jpg "Rolex Submariner" --site dhgate --max 50 --top 10
+  # Rechercher sur DHgate avec plus de résultats (10 pages ≈ 100-200 produits)
+  python search_by_image.py /path/to/rolex.jpg "Rolex Submariner" --site dhgate --pages 10 --top 10
 
-  # Recherche rapide (moins de résultats)
-  python search_by_image.py /path/to/product.jpg "luxury bag" --max 10 --top 3
+  # Recherche rapide (1 page ≈ 10-20 produits)
+  python search_by_image.py /path/to/product.jpg "luxury bag" --pages 1 --top 3
         """
     )
 
@@ -256,10 +256,10 @@ Exemples:
     )
 
     parser.add_argument(
-        '--max',
+        '--pages',
         type=int,
-        default=20,
-        help='Nombre maximum d\'annonces à scraper (défaut: 20)'
+        default=3,
+        help='Nombre de pages à scraper (1 page ≈ 10-20 produits, défaut: 3)'
     )
 
     parser.add_argument(
@@ -292,11 +292,11 @@ Exemples:
         engine = ImageSearchEngine(device=args.device)
 
         # Lancer la recherche
-        results = engine.search(
+        results = engine.search_products(
             reference_image_path=args.image,
             search_query=args.query,
             site=args.site,
-            max_results=args.max,
+            max_pages=args.pages,
             top_n=args.top
         )
 
