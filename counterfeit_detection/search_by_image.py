@@ -29,15 +29,15 @@ sys.path.append(str(Path(__file__).parent))
 
 from scrapers.dhgate_scraper import DHgateScraper
 
-# Essayer d'importer le scraper Crawlee (moderne, recommandé)
+# Essayer d'importer le scraper Playwright (moderne, Python 3.8 compatible)
 try:
-    from scrapers.aliexpress_crawlee_scraper import create_aliexpress_scraper
-    CRAWLEE_SCRAPER_AVAILABLE = True
+    from scrapers.aliexpress_playwright_scraper import create_aliexpress_scraper
+    PLAYWRIGHT_SCRAPER_AVAILABLE = True
 except ImportError:
-    CRAWLEE_SCRAPER_AVAILABLE = False
+    PLAYWRIGHT_SCRAPER_AVAILABLE = False
 
 # Fallback sur l'ancien scraper BeautifulSoup
-if not CRAWLEE_SCRAPER_AVAILABLE:
+if not PLAYWRIGHT_SCRAPER_AVAILABLE:
     from scrapers.aliexpress_scraper import AliExpressScraper
 
 # Essayer d'importer le modèle avancé en priorité
@@ -89,16 +89,16 @@ class ImageSearchEngine:
             raise RuntimeError("Failed to load image similarity model")
 
         # Initialiser les scrapers
-        # Utiliser Crawlee pour AliExpress si disponible (BEAUCOUP plus fiable)
-        if CRAWLEE_SCRAPER_AVAILABLE:
-            logger.info("🚀 Using CRAWLEE scraper for AliExpress (Playwright-based)")
+        # Utiliser Playwright pour AliExpress si disponible (BEAUCOUP plus fiable)
+        if PLAYWRIGHT_SCRAPER_AVAILABLE:
+            logger.info("🚀 Using PLAYWRIGHT scraper for AliExpress (JavaScript support)")
             aliexpress_scraper = create_aliexpress_scraper()
             if aliexpress_scraper is None:
-                logger.warning("⚠️  Crawlee scraper failed, falling back to BeautifulSoup")
+                logger.warning("⚠️  Playwright scraper failed, falling back to BeautifulSoup")
                 aliexpress_scraper = AliExpressScraper()
         else:
-            logger.warning("⚠️  Crawlee not available, using BeautifulSoup scraper (may not work)")
-            logger.warning("   Install Crawlee with: pip install crawlee[playwright]")
+            logger.warning("⚠️  Playwright not available, using BeautifulSoup scraper (may not work)")
+            logger.warning("   Install Playwright with: pip install playwright")
             aliexpress_scraper = AliExpressScraper()
 
         self.scrapers = {

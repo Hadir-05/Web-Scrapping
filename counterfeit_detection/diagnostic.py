@@ -14,12 +14,12 @@ sys.path.append(str(Path(__file__).parent))
 from detectors.advanced_image_similarity import create_advanced_similarity_model
 from detectors.image_similarity_model import create_image_similarity_model
 
-# Essayer d'utiliser le scraper Crawlee (moderne, recommandé)
+# Essayer d'utiliser le scraper Playwright (moderne, Python 3.8 compatible)
 try:
-    from scrapers.aliexpress_crawlee_scraper import create_aliexpress_scraper
-    CRAWLEE_AVAILABLE = True
+    from scrapers.aliexpress_playwright_scraper import create_aliexpress_scraper
+    PLAYWRIGHT_AVAILABLE = True
 except ImportError:
-    CRAWLEE_AVAILABLE = False
+    PLAYWRIGHT_AVAILABLE = False
     from scrapers.aliexpress_scraper import AliExpressScraper
 
 
@@ -87,16 +87,16 @@ def test_scraper(search_query, max_pages=1):
     print()
 
     try:
-        # Utiliser Crawlee si disponible
-        if CRAWLEE_AVAILABLE:
-            print("🚀 Utilisation du scraper CRAWLEE (Playwright)")
+        # Utiliser Playwright si disponible
+        if PLAYWRIGHT_AVAILABLE:
+            print("🚀 Utilisation du scraper PLAYWRIGHT (JavaScript support)")
             scraper = create_aliexpress_scraper()
             if scraper is None:
-                print("❌ Échec de création du scraper Crawlee, utilisation du fallback")
+                print("❌ Échec de création du scraper Playwright, utilisation du fallback")
                 scraper = AliExpressScraper()
         else:
-            print("⚠️  Crawlee non disponible, utilisation du scraper BeautifulSoup")
-            print("   (Peut ne pas fonctionner, installez Crawlee)")
+            print("⚠️  Playwright non disponible, utilisation du scraper BeautifulSoup")
+            print("   (Peut ne pas fonctionner, installez Playwright)")
             scraper = AliExpressScraper()
 
         print()
@@ -172,14 +172,14 @@ def test_image_comparison_with_scraped(reference_image, search_query, max_pages=
 
         # Scraper
         print(f"🔍 Scraping AliExpress...")
-        if CRAWLEE_AVAILABLE:
-            print("   🚀 Using CRAWLEE scraper (Playwright)")
+        if PLAYWRIGHT_AVAILABLE:
+            print("   🚀 Using PLAYWRIGHT scraper (JavaScript support)")
             scraper = create_aliexpress_scraper()
             if scraper is None:
-                print("   ⚠️  Crawlee failed, using fallback")
+                print("   ⚠️  Playwright failed, using fallback")
                 scraper = AliExpressScraper()
         else:
-            print("   ⚠️  Using BeautifulSoup scraper (install Crawlee for better results)")
+            print("   ⚠️  Using BeautifulSoup scraper (install Playwright for better results)")
             scraper = AliExpressScraper()
 
         results = scraper.search(search_query, max_pages=max_pages)
