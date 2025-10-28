@@ -13,7 +13,14 @@ sys.path.append(str(Path(__file__).parent))
 
 from detectors.advanced_image_similarity import create_advanced_similarity_model
 from detectors.image_similarity_model import create_image_similarity_model
-from scrapers.aliexpress_scraper import AliExpressScraper
+
+# Essayer d'utiliser le scraper Crawlee (moderne, recommandé)
+try:
+    from scrapers.aliexpress_crawlee_scraper import create_aliexpress_scraper
+    CRAWLEE_AVAILABLE = True
+except ImportError:
+    CRAWLEE_AVAILABLE = False
+    from scrapers.aliexpress_scraper import AliExpressScraper
 
 
 def test_similarity_directly(image1_path, image2_path):
@@ -80,7 +87,19 @@ def test_scraper(search_query, max_pages=1):
     print()
 
     try:
-        scraper = AliExpressScraper()
+        # Utiliser Crawlee si disponible
+        if CRAWLEE_AVAILABLE:
+            print("🚀 Utilisation du scraper CRAWLEE (Playwright)")
+            scraper = create_aliexpress_scraper()
+            if scraper is None:
+                print("❌ Échec de création du scraper Crawlee, utilisation du fallback")
+                scraper = AliExpressScraper()
+        else:
+            print("⚠️  Crawlee non disponible, utilisation du scraper BeautifulSoup")
+            print("   (Peut ne pas fonctionner, installez Crawlee)")
+            scraper = AliExpressScraper()
+
+        print()
         results = scraper.search(search_query, max_pages=max_pages)
 
         if not results:
@@ -153,7 +172,16 @@ def test_image_comparison_with_scraped(reference_image, search_query, max_pages=
 
         # Scraper
         print(f"🔍 Scraping AliExpress...")
-        scraper = AliExpressScraper()
+        if CRAWLEE_AVAILABLE:
+            print("   🚀 Using CRAWLEE scraper (Playwright)")
+            scraper = create_aliexpress_scraper()
+            if scraper is None:
+                print("   ⚠️  Crawlee failed, using fallback")
+                scraper = AliExpressScraper()
+        else:
+            print("   ⚠️  Using BeautifulSoup scraper (install Crawlee for better results)")
+            scraper = AliExpressScraper()
+
         results = scraper.search(search_query, max_pages=max_pages)
 
         if not results:

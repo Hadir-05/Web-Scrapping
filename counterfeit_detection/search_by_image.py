@@ -27,8 +27,18 @@ from typing import List, Dict, Tuple
 # Ajouter le chemin parent
 sys.path.append(str(Path(__file__).parent))
 
-from scrapers.aliexpress_scraper import AliExpressScraper
 from scrapers.dhgate_scraper import DHgateScraper
+
+# Essayer d'importer le scraper Crawlee (moderne, recommandé)
+try:
+    from scrapers.aliexpress_crawlee_scraper import create_aliexpress_scraper
+    CRAWLEE_SCRAPER_AVAILABLE = True
+except ImportError:
+    CRAWLEE_SCRAPER_AVAILABLE = False
+
+# Fallback sur l'ancien scraper BeautifulSoup
+if not CRAWLEE_SCRAPER_AVAILABLE:
+    from scrapers.aliexpress_scraper import AliExpressScraper
 
 # Essayer d'importer le modèle avancé en priorité
 try:
@@ -79,8 +89,20 @@ class ImageSearchEngine:
             raise RuntimeError("Failed to load image similarity model")
 
         # Initialiser les scrapers
+        # Utiliser Crawlee pour AliExpress si disponible (BEAUCOUP plus fiable)
+        if CRAWLEE_SCRAPER_AVAILABLE:
+            logger.info("🚀 Using CRAWLEE scraper for AliExpress (Playwright-based)")
+            aliexpress_scraper = create_aliexpress_scraper()
+            if aliexpress_scraper is None:
+                logger.warning("⚠️  Crawlee scraper failed, falling back to BeautifulSoup")
+                aliexpress_scraper = AliExpressScraper()
+        else:
+            logger.warning("⚠️  Crawlee not available, using BeautifulSoup scraper (may not work)")
+            logger.warning("   Install Crawlee with: pip install crawlee[playwright]")
+            aliexpress_scraper = AliExpressScraper()
+
         self.scrapers = {
-            'aliexpress': AliExpressScraper(),
+            'aliexpress': aliexpress_scraper,
             'dhgate': DHgateScraper()
         }
 
