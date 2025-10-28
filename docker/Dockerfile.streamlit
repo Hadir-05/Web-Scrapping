@@ -1,0 +1,62 @@
+# Dockerfile pour l'application Streamlit MVP
+
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="Luxury AI Search Team"
+LABEL description="Streamlit MVP pour Luxury AI Search"
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Répertoire de travail
+WORKDIR /app
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier les requirements
+COPY requirements.txt .
+
+# Installer les dépendances Python
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copier le code de l'application
+COPY streamlit_app ./streamlit_app
+COPY models ./models
+
+# Créer le dossier de configuration Streamlit
+RUN mkdir -p ~/.streamlit
+
+# Configuration Streamlit
+RUN echo "\
+[server]\n\
+port = 8501\n\
+address = 0.0.0.0\n\
+headless = true\n\
+\n\
+[theme]\n\
+primaryColor = '#D4AF37'\n\
+backgroundColor = '#FFFFFF'\n\
+secondaryBackgroundColor = '#F5F5F5'\n\
+textColor = '#333333'\n\
+font = 'sans serif'\n\
+" > ~/.streamlit/config.toml
+
+# Exposer le port
+EXPOSE 8501
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# Commande de démarrage
+CMD ["streamlit", "run", "streamlit_app/app.py"]

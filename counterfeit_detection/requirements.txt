@@ -1,0 +1,45 @@
+# Web Scraping
+requests==2.31.0
+beautifulsoup4==4.12.2
+selenium==4.15.2
+lxml==4.9.3
+
+# Modern Web Scraping (Playwright pour AliExpress - Python 3.8 compatible)
+# Installation: pip install playwright && playwright install chromium
+playwright>=1.40.0
+
+# Database (compatible Python 3.8)
+sqlalchemy==2.0.23
+
+# Data Processing (compatible Python 3.8)
+pandas==2.0.3
+numpy==1.24.4
+
+# Visualization & Dashboard
+streamlit==1.28.0
+plotly==5.17.0
+
+# AI/ML Models (for image similarity - compatible Python 3.8)
+torch==1.13.1
+torchvision==0.14.1
+
+# Advanced Image Similarity (CLIP + pHash + ORB)
+# CLIP: Modèle sémantique pour comprendre les images de produits
+git+https://github.com/openai/CLIP.git
+# pHash: Perceptual hashing pour détecter images quasi-identiques
+imagehash==4.3.1
+# ftfy: Dependency pour CLIP
+ftfy==6.1.1
+# regex: Dependency pour CLIP
+regex==2023.10.3
+
+# Image Processing (OpenCV fournit ORB pour features géométriques)
+pillow==10.0.1
+opencv-python==4.8.1.78
+
+# Utilities
+python-dotenv==1.0.0
+schedule==1.2.0
+
+# Logging
+loguru==0.7.2
