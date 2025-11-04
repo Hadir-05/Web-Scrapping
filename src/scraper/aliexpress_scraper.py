@@ -1,12 +1,13 @@
 """
-Module de scraping AliExpress avec recherche hybride (catégorie + image)
+Module de scraping AliExpress avec recherche hybride (catégorie + image) et pagination
 """
 import asyncio
 import os
 from datetime import datetime
 from typing import List, Optional, Tuple
-from urllib.parse import urljoin, quote, urlparse
+from urllib.parse import urljoin, quote, urlparse, parse_qs, urlencode
 from pathlib import Path
+import math
 
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 from playwright.async_api import Page
@@ -15,7 +16,7 @@ from src.models.data_models import ImageMetadata, ProductData
 
 
 class AliExpressImageSearchScraper:
-    """Scraper AliExpress avec recherche hybride (catégorie + comparaison d'images)"""
+    """Scraper AliExpress avec recherche hybride (catégorie + comparaison d'images) et pagination"""
 
     def __init__(self, output_dir: str = "output"):
         self.output_dir = Path(output_dir)
@@ -25,6 +26,8 @@ class AliExpressImageSearchScraper:
         self.image_metadata_list: List[ImageMetadata] = []
         self.product_data_list: List[ProductData] = []
         self.image_counter = 0
+        self.current_page = 1
+        self.target_results = 0
 
     async def search_by_image(
         self,
@@ -39,7 +42,7 @@ class AliExpressImageSearchScraper:
         Args:
             image_path: Chemin vers l'image à rechercher
             category: Catégorie du produit (ex: "bag", "ring", "shoes")
-            max_results: Nombre maximum de résultats
+            max_results: Nombre maximum de résultats (peut parcourir plusieurs pages)
             headless: Mode headless pour le navigateur
 
         Returns:
@@ -48,140 +51,93 @@ class AliExpressImageSearchScraper:
         self.image_metadata_list = []
         self.product_data_list = []
         self.image_counter = 0
+        self.current_page = 1
+        self.target_results = max_results
 
         # Si pas de catégorie, utiliser "product"
         if not category:
             category = "product"
 
+        # Estimer le nombre de pages nécessaires (environ 40-60 produits par page)
+        products_per_page = 40
+        estimated_pages = math.ceil(max_results / products_per_page)
+        # Limiter à 10 pages maximum pour éviter les timeouts
+        max_pages = min(estimated_pages, 10)
+
         crawler = PlaywrightCrawler(
-            max_requests_per_crawl=1,
+            max_requests_per_crawl=max_pages,
             headless=headless,
             browser_type='chromium',
+            max_request_retries=2,
         )
 
         @crawler.router.default_handler
         async def request_handler(context: PlaywrightCrawlingContext) -> None:
             page = context.page
 
-            # Effectuer la recherche par catégorie et extraire les résultats
-            await self._search_by_category_and_extract(context, category, max_results)
+            # Extraire les produits de la page actuelle
+            await self._extract_products_from_current_page(context)
 
-        # Démarrer avec la page principale d'AliExpress
-        await crawler.run(['https://www.aliexpress.com/'])
+            # Si on n'a pas assez de produits et qu'on est sur la première page,
+            # ajouter les URLs des pages suivantes
+            if len(self.product_data_list) < self.target_results and self.current_page == 1:
+                # Essayer de trouver et enqueue les pages suivantes
+                await self._enqueue_next_pages(context, category, max_pages)
+
+        # Construire l'URL de recherche initiale
+        search_url = f"https://www.aliexpress.com/w/wholesale-{quote(category)}.html"
+
+        await crawler.run([search_url])
 
         return self.image_metadata_list, self.product_data_list
 
-    async def _search_by_category_and_extract(
-        self,
-        context: PlaywrightCrawlingContext,
-        category: str,
-        max_results: int
-    ):
-        """
-        Effectuer une recherche par catégorie sur AliExpress
-        """
-        page = context.page
-
+    async def _enqueue_next_pages(self, context: PlaywrightCrawlingContext, category: str, max_pages: int):
+        """Ajouter les URLs des pages suivantes à la queue"""
         try:
-            context.log.info(f"🌐 Navigation vers AliExpress...")
+            # Générer les URLs pour les pages suivantes
+            for page_num in range(2, max_pages + 1):
+                # AliExpress utilise le paramètre 'page' dans l'URL
+                next_url = f"https://www.aliexpress.com/w/wholesale-{quote(category)}.html?page={page_num}"
 
-            # Attendre le chargement
-            await page.wait_for_load_state('domcontentloaded', timeout=30000)
-            await page.wait_for_timeout(3000)
-
-            context.log.info(f"🔍 Recherche de produits dans la catégorie: {category}")
-
-            # Chercher la barre de recherche
-            search_selectors = [
-                'input[type="search"]',
-                'input[placeholder*="Search"]',
-                'input[placeholder*="search"]',
-                'input.search-bar-input',
-                'input[class*="search"]',
-            ]
-
-            search_input = None
-            for selector in search_selectors:
-                try:
-                    search_input = await page.wait_for_selector(selector, timeout=5000)
-                    if search_input and await search_input.is_visible():
-                        context.log.info(f"✅ Barre de recherche trouvée: {selector}")
-                        break
-                except:
-                    continue
-
-            if search_input:
-                # Remplir la recherche avec la catégorie
-                context.log.info(f"⌨️  Saisie de la catégorie: {category}")
-                await search_input.fill(category)
-                await page.wait_for_timeout(1000)
-
-                # Appuyer sur Entrée ou chercher le bouton de recherche
-                try:
-                    await search_input.press("Enter")
-                    context.log.info("↩️  Envoi de la recherche...")
-                except:
-                    # Essayer de cliquer sur le bouton de recherche
-                    search_button = await page.query_selector('button[type="submit"], button.search-button')
-                    if search_button:
-                        await search_button.click()
-
-                # Attendre les résultats
-                context.log.info("⏳ Attente des résultats...")
-                await page.wait_for_timeout(5000)
-
-                try:
-                    await page.wait_for_load_state('networkidle', timeout=30000)
-                except:
-                    await page.wait_for_timeout(3000)
-
-                # Extraire les produits
-                context.log.info("📦 Extraction des produits...")
-                await self._extract_products_from_results(context, max_results)
-
-            else:
-                context.log.error("❌ Impossible de trouver la barre de recherche")
-                # Fallback : utiliser l'URL directe de recherche
-                search_url = f"https://www.aliexpress.com/w/wholesale-{quote(category)}.html"
-                context.log.info(f"🔗 Tentative avec URL directe: {search_url}")
-                await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
-                await page.wait_for_timeout(5000)
-                await self._extract_products_from_results(context, max_results)
+                context.log.info(f"📑 Ajout de la page {page_num} à la queue")
+                await context.add_requests([next_url])
 
         except Exception as e:
-            context.log.error(f"❌ Erreur lors de la recherche: {e}")
-            # Dernier recours : URL directe
-            try:
-                search_url = f"https://www.aliexpress.com/w/wholesale-{quote(category)}.html"
-                context.log.info(f"🔗 Dernier recours avec URL: {search_url}")
-                await page.goto(search_url, wait_until='domcontentloaded', timeout=30000)
-                await page.wait_for_timeout(5000)
-                await self._extract_products_from_results(context, max_results)
-            except Exception as e2:
-                context.log.error(f"❌ Échec complet: {e2}")
+            context.log.error(f"❌ Erreur lors de l'ajout des pages suivantes: {e}")
 
-    async def _extract_products_from_results(self, context: PlaywrightCrawlingContext, max_results: int):
+    async def _extract_products_from_current_page(self, context: PlaywrightCrawlingContext):
         """
-        Extraire les produits depuis la page de résultats
+        Extraire les produits de la page actuelle
         """
         page = context.page
         url = page.url
 
         try:
-            context.log.info(f"📄 Extraction depuis: {url}")
+            # Déterminer le numéro de page actuel
+            if 'page=' in url:
+                try:
+                    page_param = url.split('page=')[1].split('&')[0]
+                    self.current_page = int(page_param)
+                except:
+                    pass
 
-            # Attendre que les produits soient chargés
+            context.log.info(f"📄 Extraction depuis la page {self.current_page}: {url}")
+
+            # Attendre que la page soit chargée
+            await page.wait_for_load_state('domcontentloaded', timeout=30000)
             await page.wait_for_timeout(3000)
 
-            # Scroll pour charger plus de produits (lazy loading)
+            # Scroll pour charger les produits (lazy loading)
             context.log.info("📜 Scroll pour charger les produits...")
-            for i in range(3):
+            for i in range(5):
                 await page.evaluate("window.scrollBy(0, window.innerHeight)")
-                await page.wait_for_timeout(1000)
+                await page.wait_for_timeout(800)
+
+            # Attendre un peu plus pour que les images se chargent
+            await page.wait_for_timeout(2000)
 
             # Sélecteurs pour les cartes de produits AliExpress
             product_selectors = [
-                # Nouveaux sélecteurs AliExpress 2024/2025
                 'div[class*="search-card-item"]',
                 'div[class*="product-card"]',
                 'a[class*="search-card-item"]',
@@ -190,7 +146,6 @@ class AliExpressImageSearchScraper:
                 'article[class*="product"]',
                 '.list--item',
                 'div.manhattan--container--product',
-                # Liens de produits directs
                 'a[href*="/item/"]',
             ]
 
@@ -205,23 +160,27 @@ class AliExpressImageSearchScraper:
                     continue
 
             if not products:
-                context.log.warning("⚠️ Aucun produit trouvé avec les sélecteurs standards")
+                context.log.warning(f"⚠️ Aucun produit trouvé sur la page {self.current_page}")
                 # Screenshot pour debug
-                debug_path = self.output_dir / "debug_no_products.png"
-                await page.screenshot(path=str(debug_path))
+                debug_path = self.output_dir / f"debug_page_{self.current_page}.png"
+                await page.screenshot(path=str(debug_path), full_page=True)
                 context.log.info(f"📸 Screenshot de debug sauvegardé: {debug_path}")
                 return
 
-            # Limiter au nombre souhaité
-            products = products[:max_results]
-            context.log.info(f"📊 Traitement de {len(products)} produits...")
+            context.log.info(f"📊 Traitement de {len(products)} produits de la page {self.current_page}...")
 
+            # Traiter chaque produit
             for idx, product in enumerate(products):
+                # Arrêter si on a atteint le nombre souhaité
+                if len(self.product_data_list) >= self.target_results:
+                    context.log.info(f"🎯 Objectif atteint: {len(self.product_data_list)} produits")
+                    break
+
                 try:
-                    # Scroll vers le produit pour s'assurer qu'il est visible
+                    # Scroll vers le produit
                     try:
                         await product.scroll_into_view_if_needed()
-                        await page.wait_for_timeout(500)
+                        await page.wait_for_timeout(300)
                     except:
                         pass
 
@@ -242,7 +201,7 @@ class AliExpressImageSearchScraper:
                                 product_url = urljoin(url, product_url)
 
                     # Extraire le titre
-                    title = f"Product {idx + 1}"
+                    title = f"Product {len(self.product_data_list) + 1}"
                     title_selectors = [
                         'h1', 'h2', 'h3',
                         'div[class*="title"]',
@@ -255,12 +214,10 @@ class AliExpressImageSearchScraper:
                         try:
                             title_elem = await product.query_selector(selector)
                             if title_elem:
-                                # Essayer d'abord le titre en attribut
                                 title_attr = await title_elem.get_attribute('title')
                                 if title_attr and len(title_attr.strip()) > 0:
                                     title = title_attr.strip()
                                     break
-                                # Sinon prendre le texte
                                 title_text = await title_elem.inner_text()
                                 if title_text and len(title_text.strip()) > 0:
                                     title = title_text.strip()
@@ -294,7 +251,6 @@ class AliExpressImageSearchScraper:
                     src_image = ""
                     img_elem = await product.query_selector('img')
                     if img_elem:
-                        # Essayer plusieurs attributs pour l'image
                         for attr in ['src', 'data-src', 'data-lazy-src', 'data-original']:
                             src = await img_elem.get_attribute(attr)
                             if src:
@@ -306,7 +262,7 @@ class AliExpressImageSearchScraper:
 
                     # Télécharger l'image
                     product_image_paths = []
-                    if src_image and 'data:image' not in src_image:  # Éviter les images data:
+                    if src_image and 'data:image' not in src_image:
                         img_path = await self._download_image(page, src_image)
                         if img_path:
                             product_image_paths.append(img_path)
@@ -340,27 +296,26 @@ class AliExpressImageSearchScraper:
                     )
                     self.product_data_list.append(product_data)
 
-                    context.log.info(f"✅ Produit {idx + 1}/{len(products)}: {title[:50]}")
+                    if (idx + 1) % 10 == 0:
+                        context.log.info(f"✅ Progression: {len(self.product_data_list)} produits extraits")
 
                 except Exception as e:
                     context.log.error(f"❌ Erreur produit {idx}: {e}")
                     continue
 
-            context.log.info(f"🎉 Extraction terminée: {len(self.product_data_list)} produits extraits")
+            context.log.info(f"🎉 Page {self.current_page} terminée: {len(self.product_data_list)} produits au total")
 
         except Exception as e:
-            context.log.error(f"❌ Erreur lors de l'extraction des produits: {e}")
+            context.log.error(f"❌ Erreur lors de l'extraction de la page {self.current_page}: {e}")
 
     async def _download_image(self, page: Page, image_url: str) -> str:
         """Télécharger une image et retourner le chemin local"""
         try:
-            # Créer un nom de fichier unique
             self.image_counter += 1
             ext = '.jpg'
             if '.' in image_url:
                 parsed = urlparse(image_url)
                 ext = os.path.splitext(parsed.path)[1] or '.jpg'
-                # Nettoyer l'extension
                 if '?' in ext:
                     ext = ext.split('?')[0]
                 if not ext.startswith('.'):
@@ -368,7 +323,6 @@ class AliExpressImageSearchScraper:
             filename = f"image_{self.image_counter:04d}{ext}"
             filepath = self.images_dir / filename
 
-            # Télécharger l'image
             try:
                 response = await page.request.get(image_url, timeout=10000)
                 if response.status == 200:
@@ -376,10 +330,10 @@ class AliExpressImageSearchScraper:
                         f.write(await response.body())
                     return str(filepath)
             except Exception as e:
-                print(f"Erreur téléchargement {image_url}: {e}")
+                pass
 
         except Exception as e:
-            print(f"Erreur lors du téléchargement de {image_url}: {e}")
+            pass
 
         return ""
 
@@ -397,7 +351,7 @@ async def search_aliexpress_by_image(
         image_path: Chemin vers l'image à rechercher
         category: Catégorie du produit (ex: "bag", "ring", "shoes")
         output_dir: Répertoire de sortie
-        max_results: Nombre maximum de résultats
+        max_results: Nombre maximum de résultats (peut parcourir plusieurs pages)
 
     Returns:
         Tuple contenant les listes de ImageMetadata et ProductData

@@ -143,11 +143,16 @@ def main():
 
         max_results = st.slider(
             "Nombre max de produits",
-            min_value=5,
-            max_value=50,
-            value=20,
-            help="Nombre maximum de produits à rechercher"
+            min_value=10,
+            max_value=200,
+            value=50,
+            step=10,
+            help="Nombre maximum de produits à rechercher (parcourt plusieurs pages si nécessaire)"
         )
+
+        # Estimation du nombre de pages
+        estimated_pages = max(1, (max_results + 39) // 40)
+        st.caption(f"📄 Environ {estimated_pages} page(s) seront parcourues")
 
         st.markdown("---")
         st.markdown("### 📊 Statistiques")
