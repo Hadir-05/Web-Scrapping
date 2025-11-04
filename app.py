@@ -3,20 +3,22 @@ Application Streamlit pour la recherche de produits AliExpress par image
 """
 import streamlit as st
 import asyncio
-import nest_asyncio
 import os
+import sys
 import json
 import tempfile
+import threading
 from pathlib import Path
 from datetime import datetime
 from PIL import Image
 
-# Permettre les event loops imbriqués (nécessaire sur Windows avec Streamlit)
-nest_asyncio.apply()
-
 from src.scraper.aliexpress_scraper import AliExpressImageSearchScraper
 from src.image_search.image_similarity import ImageSimilaritySearch
 from src.models.data_models import DataManager, ImageMetadata, ProductData
+
+# Configuration pour Windows - utiliser ProactorEventLoop
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
 # Configuration de la page
@@ -39,10 +41,40 @@ def init_session_state():
         st.session_state.output_dir = "output"
 
 
-async def run_aliexpress_search(image_path: str, max_results: int, output_dir: str):
-    """Exécuter la recherche AliExpress par image de manière asynchrone"""
-    scraper = AliExpressImageSearchScraper(output_dir)
-    return await scraper.search_by_image(image_path, max_results, headless=True)
+def run_aliexpress_search_sync(image_path: str, max_results: int, output_dir: str):
+    """
+    Exécuter la recherche AliExpress par image de manière synchrone
+    Utilise un thread séparé avec son propre event loop pour éviter les conflits
+    """
+    result_container = {'result': None, 'error': None}
+
+    def run_in_thread():
+        try:
+            # Créer un nouvel event loop pour ce thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # Exécuter la recherche
+            scraper = AliExpressImageSearchScraper(output_dir)
+            result = loop.run_until_complete(
+                scraper.search_by_image(image_path, max_results, headless=True)
+            )
+            result_container['result'] = result
+
+            # Nettoyer
+            loop.close()
+        except Exception as e:
+            result_container['error'] = e
+
+    # Lancer dans un thread séparé
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    thread.join()
+
+    if result_container['error']:
+        raise result_container['error']
+
+    return result_container['result']
 
 
 def save_results(image_metadata_list, product_data_list, output_dir):
@@ -182,12 +214,10 @@ def main():
                     with st.spinner("🔄 Recherche en cours sur AliExpress... Cela peut prendre plusieurs minutes."):
                         try:
                             # Exécuter la recherche
-                            image_metadata_list, product_data_list = asyncio.run(
-                                run_aliexpress_search(
-                                    st.session_state.uploaded_image_path,
-                                    max_results,
-                                    output_dir
-                                )
+                            image_metadata_list, product_data_list = run_aliexpress_search_sync(
+                                st.session_state.uploaded_image_path,
+                                max_results,
+                                output_dir
                             )
 
                             st.session_state.search_results = (image_metadata_list, product_data_list)

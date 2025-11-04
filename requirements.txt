@@ -9,7 +9,6 @@ numpy>=1.24.0
 
 # Web Interface
 streamlit>=1.28.0
-nest-asyncio>=1.5.0
 
 # Data Management
 python-dateutil>=2.8.2
