@@ -95,7 +95,7 @@ def save_results(image_metadata_list, product_data_list, output_dir):
 
 def calculate_similarity_scores(uploaded_image_path: str, product_data_list):
     """Calculer les scores de similarité entre l'image uploadée et les produits trouvés"""
-    image_search = ImageSimilaritySearch()
+    image_search = ImageSimilaritySearch(use_clip=True)
 
     # Ajouter toutes les images de produits à l'index
     for product in product_data_list:
@@ -107,11 +107,12 @@ def calculate_similarity_scores(uploaded_image_path: str, product_data_list):
                     'product_price': product.price
                 })
 
-    # Rechercher les images similaires
+    # Rechercher les images similaires avec CLIP
+    # Threshold plus bas pour CLIP (similarité cosinus 0-1)
     similar_images = image_search.search_similar(
         uploaded_image_path,
         top_k=len(product_data_list),
-        threshold=50  # Seuil plus permissif
+        threshold=0.3  # Seuil CLIP (similarité cosinus)
     )
 
     # Créer un dictionnaire de scores par chemin d'image
@@ -179,6 +180,7 @@ def main():
         - **Session Pool** : Gestion de sessions
         - **Concurrency** : Téléchargements parallèles
         - **Image Search** : Upload natif AliExpress
+        - **CLIP Model** : ViT-L-14 (Laion2B) pour similarité
         """)
 
     # Tabs pour organiser l'interface
@@ -261,12 +263,12 @@ def main():
                                 st.success(f"✅ Recherche terminée avec succès!")
                                 st.info(f"📊 {len(product_data_list)} produits trouvés")
 
-                                # Calculer les scores de similarité
-                                st.info("🔄 Calcul des similarités...")
-                                similarity_scores = calculate_similarity_scores(
-                                    st.session_state.uploaded_image_path,
-                                    product_data_list
-                                )
+                                # Calculer les scores de similarité avec CLIP
+                                with st.spinner("🧠 Calcul des similarités avec CLIP (ViT-L-14)..."):
+                                    similarity_scores = calculate_similarity_scores(
+                                        st.session_state.uploaded_image_path,
+                                        product_data_list
+                                    )
 
                                 # Trier les produits par similarité
                                 sorted_products = []
@@ -320,7 +322,7 @@ def main():
 
                     st.markdown(f"**{product.title[:60]}...**")
                     st.markdown(f"💰 **Prix:** {product.price}")
-                    st.markdown(f"🎯 **Similarité:** {similarity_score:.1%}")
+                    st.markdown(f"🧠 **CLIP Score:** {similarity_score:.1%}")
 
                     if product.item_url:
                         st.markdown(f"[🔗 Voir sur AliExpress]({product.item_url})")
@@ -350,7 +352,7 @@ def main():
 
             # Afficher tous les produits
             for idx, (product, similarity_score) in enumerate(sorted_products):
-                with st.expander(f"🔢 Produit {idx + 1} - {product.title} - Similarité: {similarity_score:.1%}"):
+                with st.expander(f"🔢 Produit {idx + 1} - {product.title} - CLIP: {similarity_score:.1%}"):
                     col1, col2 = st.columns([1, 2])
 
                     with col1:
@@ -364,7 +366,8 @@ def main():
                     with col2:
                         st.markdown(f"### {product.title}")
                         st.markdown(f"**💰 Prix:** {product.price}")
-                        st.markdown(f"**🎯 Score de Similarité:** {similarity_score:.2%}")
+                        st.markdown(f"**🧠 CLIP Similarity Score:** {similarity_score:.2%}")
+                        st.caption("Score calculé avec CLIP ViT-L-14 (Laion2B) - Similarité cosinus")
                         st.markdown(f"**🔗 URL:** {product.item_url}")
                         st.markdown(f"**📅 Date de collecte:** {product.collection_date.strftime('%Y-%m-%d %H:%M')}")
 

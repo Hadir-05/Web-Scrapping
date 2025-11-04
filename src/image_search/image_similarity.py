@@ -1,5 +1,6 @@
 """
 Module de recherche par similarité d'images
+Utilise CLIP pour des embeddings de haute qualité
 """
 import os
 from typing import List, Tuple, Optional
@@ -7,15 +8,41 @@ from pathlib import Path
 import io
 
 from PIL import Image
-import imagehash
 import numpy as np
+
+# Essayer d'importer CLIP, sinon utiliser le fallback perceptual hashing
+try:
+    from src.image_search.clip_similarity import CLIPSimilarityModel
+    CLIP_AVAILABLE = True
+except ImportError:
+    CLIP_AVAILABLE = False
+    print("⚠️ CLIP not available, falling back to perceptual hashing")
+    import imagehash
 
 
 class ImageSimilaritySearch:
-    """Classe pour la recherche de similarité d'images utilisant le hashing perceptuel"""
+    """
+    Classe pour la recherche de similarité d'images
+    Utilise CLIP si disponible, sinon perceptual hashing
+    """
 
-    def __init__(self):
-        self.image_hashes = {}  # {image_path: hash}
+    def __init__(self, use_clip: bool = True):
+        """
+        Initialise la recherche de similarité
+
+        Args:
+            use_clip: Utiliser CLIP si disponible (True par défaut)
+        """
+        self.use_clip = use_clip and CLIP_AVAILABLE
+
+        if self.use_clip:
+            print("🎯 Utilisation de CLIP pour la similarité d'images")
+            self.clip_model = None  # Sera initialisé lors de la première recherche
+            self.image_embeddings = {}  # {image_path: embedding}
+        else:
+            print("🔍 Utilisation du perceptual hashing pour la similarité")
+            self.image_hashes = {}  # {image_path: hash}
+
         self.image_info = {}    # {image_path: metadata}
 
     def add_image(self, image_path: str, metadata: dict = None):
@@ -27,20 +54,28 @@ class ImageSimilaritySearch:
             metadata: Métadonnées optionnelles associées à l'image
         """
         try:
-            img = Image.open(image_path)
-            # Calculer plusieurs hashes pour une meilleure précision
-            ahash = imagehash.average_hash(img)
-            phash = imagehash.phash(img)
-            dhash = imagehash.dhash(img)
-            whash = imagehash.whash(img)
+            if self.use_clip:
+                # Initialiser CLIP si nécessaire
+                if self.clip_model is None:
+                    self.clip_model = CLIPSimilarityModel()
 
-            # Stocker tous les hashes
-            self.image_hashes[image_path] = {
-                'ahash': ahash,
-                'phash': phash,
-                'dhash': dhash,
-                'whash': whash
-            }
+                # Calculer l'embedding CLIP
+                embedding = self.clip_model.compute_features(image_path)
+                self.image_embeddings[image_path] = embedding
+            else:
+                # Perceptual hashing (fallback)
+                img = Image.open(image_path)
+                ahash = imagehash.average_hash(img)
+                phash = imagehash.phash(img)
+                dhash = imagehash.dhash(img)
+                whash = imagehash.whash(img)
+
+                self.image_hashes[image_path] = {
+                    'ahash': ahash,
+                    'phash': phash,
+                    'dhash': dhash,
+                    'whash': whash
+                }
 
             # Stocker les métadonnées
             self.image_info[image_path] = metadata or {}
@@ -68,7 +103,7 @@ class ImageSimilaritySearch:
         self,
         query_image_path: str,
         top_k: int = 5,
-        threshold: int = 10
+        threshold: float = 0.5
     ) -> List[Tuple[str, float, dict]]:
         """
         Rechercher les images similaires à l'image de requête
@@ -76,42 +111,64 @@ class ImageSimilaritySearch:
         Args:
             query_image_path: Chemin vers l'image de requête
             top_k: Nombre de résultats à retourner
-            threshold: Seuil de distance maximale (plus bas = plus similaire)
+            threshold: Seuil de similarité minimale (0-1, plus haut = plus similaire)
+                      - Pour CLIP: 0.5 par défaut (similarité cosinus)
+                      - Pour hashing: 10 par défaut (distance hamming)
 
         Returns:
             Liste de tuples (chemin_image, score_similarité, métadonnées)
         """
         try:
-            query_img = Image.open(query_image_path)
+            if self.use_clip:
+                # Initialiser CLIP si nécessaire
+                if self.clip_model is None:
+                    self.clip_model = CLIPSimilarityModel()
 
-            # Calculer les hashes de l'image de requête
-            query_ahash = imagehash.average_hash(query_img)
-            query_phash = imagehash.phash(query_img)
-            query_dhash = imagehash.dhash(query_img)
-            query_whash = imagehash.whash(query_img)
+                # Calculer l'embedding de la requête
+                query_embedding = self.clip_model.compute_features(query_image_path)
 
-            # Calculer les distances pour toutes les images
-            similarities = []
-            for image_path, hashes in self.image_hashes.items():
-                # Calculer la distance moyenne de tous les hashes
-                ahash_dist = query_ahash - hashes['ahash']
-                phash_dist = query_phash - hashes['phash']
-                dhash_dist = query_dhash - hashes['dhash']
-                whash_dist = query_whash - hashes['whash']
+                # Calculer la similarité cosinus avec toutes les images
+                from sklearn.metrics.pairwise import cosine_similarity
 
-                # Distance moyenne pondérée (phash est généralement plus fiable)
-                avg_distance = (ahash_dist + 2*phash_dist + dhash_dist + whash_dist) / 5.0
+                similarities = []
+                for image_path, embedding in self.image_embeddings.items():
+                    sim = cosine_similarity(query_embedding, embedding)[0][0]
+                    similarity_score = float(sim)
 
-                # Convertir la distance en score de similarité (0-1, 1 = identique)
-                # Distance typique est entre 0 et 64 pour un hash de 8x8
-                similarity_score = max(0, 1 - (avg_distance / 64.0))
+                    if similarity_score >= threshold:
+                        similarities.append((
+                            image_path,
+                            similarity_score,
+                            self.image_info.get(image_path, {})
+                        ))
 
-                if avg_distance <= threshold:
-                    similarities.append((
-                        image_path,
-                        similarity_score,
-                        self.image_info.get(image_path, {})
-                    ))
+            else:
+                # Perceptual hashing (fallback)
+                query_img = Image.open(query_image_path)
+
+                query_ahash = imagehash.average_hash(query_img)
+                query_phash = imagehash.phash(query_img)
+                query_dhash = imagehash.dhash(query_img)
+                query_whash = imagehash.whash(query_img)
+
+                similarities = []
+                hash_threshold = int(threshold) if threshold < 100 else 10
+
+                for image_path, hashes in self.image_hashes.items():
+                    ahash_dist = query_ahash - hashes['ahash']
+                    phash_dist = query_phash - hashes['phash']
+                    dhash_dist = query_dhash - hashes['dhash']
+                    whash_dist = query_whash - hashes['whash']
+
+                    avg_distance = (ahash_dist + 2*phash_dist + dhash_dist + whash_dist) / 5.0
+                    similarity_score = max(0, 1 - (avg_distance / 64.0))
+
+                    if avg_distance <= hash_threshold:
+                        similarities.append((
+                            image_path,
+                            similarity_score,
+                            self.image_info.get(image_path, {})
+                        ))
 
             # Trier par score de similarité décroissant
             similarities.sort(key=lambda x: x[1], reverse=True)
@@ -120,6 +177,8 @@ class ImageSimilaritySearch:
 
         except Exception as e:
             print(f"Erreur lors de la recherche de similarité: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def search_similar_from_bytes(
@@ -223,12 +282,21 @@ class ImageSimilaritySearch:
 
     def clear(self):
         """Vider l'index de recherche"""
-        self.image_hashes.clear()
+        if self.use_clip:
+            self.image_embeddings.clear()
+        else:
+            self.image_hashes.clear()
         self.image_info.clear()
 
     def get_stats(self) -> dict:
         """Obtenir des statistiques sur l'index"""
+        if self.use_clip:
+            total_images = len(self.image_embeddings)
+        else:
+            total_images = len(self.image_hashes)
+
         return {
-            'total_images': len(self.image_hashes),
-            'total_metadata': len(self.image_info)
+            'total_images': total_images,
+            'total_metadata': len(self.image_info),
+            'using_clip': self.use_clip
         }
