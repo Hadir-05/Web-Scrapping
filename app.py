@@ -166,21 +166,19 @@ def main():
         st.markdown("### ℹ️ Comment ça marche ?")
         st.markdown("""
         1. Uploadez une image de produit
-        2. Entrez la catégorie (bag, ring, etc.)
-        3. Cliquez sur "Rechercher sur AliExpress"
-        4. L'application cherchera des produits similaires
-        5. Les résultats sont triés par similarité
+        2. Cliquez sur "Rechercher sur AliExpress"
+        3. L'image est uploadée sur AliExpress
+        4. AliExpress trouve des produits similaires
+        5. Les résultats sont téléchargés et triés
         6. Téléchargez les résultats en JSON
         """)
 
-        st.markdown("### 📝 Exemples de Catégories")
+        st.markdown("### 🎯 Technologie")
         st.markdown("""
-        - **Sacs** : bag, handbag, backpack
-        - **Bijoux** : ring, necklace, earring
-        - **Vêtements** : dress, shirt, jeans
-        - **Chaussures** : shoes, sneakers, boots
-        - **Montres** : watch, smartwatch
-        - **Accessoires** : sunglasses, belt, hat
+        - **Fingerprinting** : Empreintes réalistes
+        - **Session Pool** : Gestion de sessions
+        - **Concurrency** : Téléchargements parallèles
+        - **Image Search** : Upload natif AliExpress
         """)
 
     # Tabs pour organiser l'interface
@@ -212,36 +210,35 @@ def main():
             with col2:
                 st.subheader("🚀 Lancer la Recherche")
 
-                # Champ de catégorie
-                st.markdown("#### 🏷️ Catégorie du Produit")
+                # Champ de catégorie (optionnel, non utilisé avec image search)
+                st.markdown("#### 🏷️ Catégorie (Optionnel)")
                 category = st.text_input(
-                    "Entrez la catégorie (ex: bag, ring, shoes, dress, watch)",
+                    "Catégorie optionnelle",
                     value="",
-                    placeholder="bag",
-                    help="Spécifiez la catégorie du produit pour des résultats plus pertinents"
+                    placeholder="Laissez vide pour utiliser uniquement l'image",
+                    help="Non requis - AliExpress utilise l'upload d'image natif"
                 )
-
-                if not category:
-                    st.warning("⚠️ Veuillez entrer une catégorie pour obtenir des résultats pertinents (ex: bag, ring, shoes)")
 
                 st.info("""
                 **Ce que l'application va faire :**
                 - Se connecter à AliExpress
-                - Rechercher des produits dans la catégorie spécifiée
-                - Télécharger les images et informations des produits
-                - Comparer la similarité avec votre image
+                - Uploader votre image sur leur système
+                - Utiliser la recherche par image native d'AliExpress
+                - Télécharger les produits similaires trouvés
+                - Calculer les scores de similarité localement
                 - Trier par pertinence
+
+                ⚡ **Nouvelle version avec fingerprinting et sessions pour éviter la détection**
                 """)
 
                 search_button = st.button(
                     "🔍 Rechercher sur AliExpress",
                     type="primary",
-                    use_container_width=True,
-                    disabled=not category
+                    use_container_width=True
                 )
 
-                if search_button and st.session_state.uploaded_image_path and category:
-                    with st.spinner(f"🔄 Recherche de '{category}' en cours sur AliExpress... Cela peut prendre quelques minutes."):
+                if search_button and st.session_state.uploaded_image_path:
+                    with st.spinner(f"🔄 Recherche par image en cours sur AliExpress... Cela peut prendre quelques minutes."):
                         try:
                             # Exécuter la recherche
                             image_metadata_list, product_data_list = run_aliexpress_search_sync(
