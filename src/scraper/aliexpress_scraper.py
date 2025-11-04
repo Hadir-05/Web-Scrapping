@@ -54,7 +54,8 @@ class AliExpressImageSearchScraper:
         self.images_dir = self.output_dir / "images"
         self.images_dir.mkdir(parents=True, exist_ok=True)
 
-        self.attempt_id = f"aliexpress_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Dataset name: only a-z, 0-9, and hyphen (not at start/end)
+        self.attempt_id = f"aliexpress-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self.image_counter = 0
         self.target_results = 0
 
