@@ -54,15 +54,20 @@ class ImageSimilaritySearch:
             metadata: Métadonnées optionnelles associées à l'image
         """
         try:
+            print(f"  [ImageSearch] Adding: {image_path}")
             if self.use_clip:
+                print(f"    [ImageSearch] Using CLIP")
                 # Initialiser CLIP si nécessaire
                 if self.clip_model is None:
+                    print(f"    [ImageSearch] Initializing CLIP model...")
                     self.clip_model = CLIPSimilarityModel()
 
                 # Calculer l'embedding CLIP
                 embedding = self.clip_model.compute_features(image_path)
                 self.image_embeddings[image_path] = embedding
+                print(f"    [ImageSearch] Embedding stored, shape: {embedding.shape}")
             else:
+                print(f"    [ImageSearch] Using perceptual hashing")
                 # Perceptual hashing (fallback)
                 img = Image.open(image_path)
                 ahash = imagehash.average_hash(img)
@@ -81,7 +86,9 @@ class ImageSimilaritySearch:
             self.image_info[image_path] = metadata or {}
 
         except Exception as e:
-            print(f"Erreur lors de l'ajout de l'image {image_path}: {e}")
+            print(f"❌ Erreur lors de l'ajout de l'image {image_path}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def add_images_from_directory(self, directory: str, metadata_func=None):
         """
@@ -119,21 +126,31 @@ class ImageSimilaritySearch:
             Liste de tuples (chemin_image, score_similarité, métadonnées)
         """
         try:
+            print(f"  [ImageSearch] Searching for: {query_image_path}")
+            print(f"  [ImageSearch] Use CLIP: {self.use_clip}")
+            print(f"  [ImageSearch] Threshold: {threshold}")
+
             if self.use_clip:
+                print(f"  [ImageSearch] Using CLIP for search")
                 # Initialiser CLIP si nécessaire
                 if self.clip_model is None:
+                    print(f"  [ImageSearch] Initializing CLIP model...")
                     self.clip_model = CLIPSimilarityModel()
 
                 # Calculer l'embedding de la requête
+                print(f"  [ImageSearch] Computing query embedding...")
                 query_embedding = self.clip_model.compute_features(query_image_path)
+                print(f"  [ImageSearch] Query embedding shape: {query_embedding.shape}")
 
                 # Calculer la similarité cosinus avec toutes les images
                 from sklearn.metrics.pairwise import cosine_similarity
 
+                print(f"  [ImageSearch] Comparing with {len(self.image_embeddings)} images")
                 similarities = []
                 for image_path, embedding in self.image_embeddings.items():
                     sim = cosine_similarity(query_embedding, embedding)[0][0]
                     similarity_score = float(sim)
+                    print(f"    [ImageSearch] {image_path}: score={similarity_score:.4f}")
 
                     if similarity_score >= threshold:
                         similarities.append((
@@ -141,6 +158,8 @@ class ImageSimilaritySearch:
                             similarity_score,
                             self.image_info.get(image_path, {})
                         ))
+                    else:
+                        print(f"      [ImageSearch] Below threshold ({threshold}), skipped")
 
             else:
                 # Perceptual hashing (fallback)

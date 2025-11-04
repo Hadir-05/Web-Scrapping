@@ -134,8 +134,11 @@ class CLIPSimilarityModel:
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"Image not found: {img_path}")
 
+        print(f"      [CLIP] Computing features for: {img_path}")
         img = Image.open(img_path).convert("RGB")
+        print(f"      [CLIP] Image size: {img.size}")
         feat = compute_embedding(self.clip_model, self.preprocess, img, device=DEVICE)
+        print(f"      [CLIP] Feature shape: {feat.shape}")
         return feat.cpu().numpy()
 
     def similarity(self, img_in: str, img_ref: Optional[str] = None) -> float:
@@ -149,6 +152,9 @@ class CLIPSimilarityModel:
         Returns:
             Score de similarité (0-1, 1 = identique)
         """
+        print(f"    [CLIP] Calculating similarity...")
+        print(f"    [CLIP] Image in: {img_in}")
+
         # Calculer les features de l'image d'entrée
         feat1 = self.compute_features(img_in)
 
@@ -159,6 +165,8 @@ class CLIPSimilarityModel:
         if img_ref is None:
             raise ValueError("No reference image specified")
 
+        print(f"    [CLIP] Image ref: {img_ref}")
+
         # Calculer les features de référence si nécessaire
         if self.ref_feat is None or self.ref_img != img_ref:
             self.ref_img = img_ref
@@ -166,6 +174,7 @@ class CLIPSimilarityModel:
 
         # Similarité cosinus
         sim = cosine_similarity(feat1, self.ref_feat)[0][0]
+        print(f"    [CLIP] Similarity score: {sim:.4f}")
 
         return float(sim)
 

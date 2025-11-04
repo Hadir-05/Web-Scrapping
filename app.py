@@ -93,32 +93,74 @@ def save_results(image_metadata_list, product_data_list, output_dir):
     return image_metadata_path, product_data_path
 
 
-def calculate_similarity_scores(uploaded_image_path: str, product_data_list):
+def calculate_similarity_scores(uploaded_image_path: str, product_data_list, output_dir: str = "output"):
     """Calculer les scores de similarité entre l'image uploadée et les produits trouvés"""
+    print(f"=== CALCUL DE SIMILARITÉ ===")
+    print(f"Image uploadée: {uploaded_image_path}")
+    print(f"Nombre de produits: {len(product_data_list)}")
+
+    # Charger le mapping URL → chemin local depuis image_metadata.json
+    image_metadata_path = Path(output_dir) / "image_metadata.json"
+    url_to_local_path = {}
+
+    if image_metadata_path.exists():
+        print(f"Chargement du mapping d'images...")
+        with open(image_metadata_path, 'r', encoding='utf-8') as f:
+            image_metadata = json.load(f)
+            for img_meta in image_metadata:
+                url = img_meta.get('src', '')
+                local_path = img_meta.get('local_path', '')
+                if url and local_path:
+                    url_to_local_path[url] = local_path
+        print(f"  {len(url_to_local_path)} mappings chargés")
+    else:
+        print(f"  ⚠️ Fichier image_metadata.json non trouvé")
+
     image_search = ImageSimilaritySearch(use_clip=True)
 
     # Ajouter toutes les images de produits à l'index
+    images_added = 0
     for product in product_data_list:
-        for img_path in product.product_image_paths:
-            if os.path.exists(img_path):
-                image_search.add_image(img_path, {
+        for img_url in product.product_image_paths:
+            # Récupérer le chemin local correspondant
+            local_path = url_to_local_path.get(img_url, img_url)
+
+            if os.path.exists(local_path):
+                print(f"  ✅ Ajout image: {local_path}")
+                image_search.add_image(local_path, {
                     'product_title': product.title,
                     'product_url': product.item_url,
-                    'product_price': product.price
+                    'product_price': product.price,
+                    'original_url': img_url
                 })
+                images_added += 1
+            else:
+                print(f"  ⚠️ Image manquante: {local_path} (URL: {img_url})")
+
+    print(f"Images ajoutées à l'index: {images_added}")
+
+    # Statistiques
+    stats = image_search.get_stats()
+    print(f"Stats: {stats}")
 
     # Rechercher les images similaires avec CLIP
     # Threshold plus bas pour CLIP (similarité cosinus 0-1)
+    print(f"Recherche de similarité...")
     similar_images = image_search.search_similar(
         uploaded_image_path,
-        top_k=len(product_data_list),
-        threshold=0.3  # Seuil CLIP (similarité cosinus)
+        top_k=len(product_data_list) * 5,  # Plus de résultats
+        threshold=0.1  # Seuil plus bas pour debug (10%)
     )
 
-    # Créer un dictionnaire de scores par chemin d'image
+    print(f"Images similaires trouvées: {len(similar_images)}")
+
+    # Créer un dictionnaire de scores par URL (pas par chemin local)
     similarity_scores = {}
-    for img_path, score, metadata in similar_images:
-        similarity_scores[img_path] = score
+    for local_path, score, metadata in similar_images:
+        # Retrouver l'URL d'origine
+        original_url = metadata.get('original_url', local_path)
+        print(f"  Score: {score:.4f} - {original_url}")
+        similarity_scores[original_url] = score
 
     return similarity_scores
 
@@ -267,7 +309,8 @@ def main():
                                 with st.spinner("🧠 Calcul des similarités avec CLIP (ViT-L-14)..."):
                                     similarity_scores = calculate_similarity_scores(
                                         st.session_state.uploaded_image_path,
-                                        product_data_list
+                                        product_data_list,
+                                        output_dir
                                     )
 
                                 # Trier les produits par similarité
@@ -300,7 +343,8 @@ def main():
             # Calculer et trier par similarité
             similarity_scores = calculate_similarity_scores(
                 st.session_state.uploaded_image_path,
-                product_data_list
+                product_data_list,
+                st.session_state.output_dir
             )
 
             sorted_products = []
@@ -337,7 +381,8 @@ def main():
             # Calculer les similarités
             similarity_scores = calculate_similarity_scores(
                 st.session_state.uploaded_image_path,
-                product_data_list
+                product_data_list,
+                st.session_state.output_dir
             )
 
             sorted_products = []

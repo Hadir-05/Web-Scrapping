@@ -368,10 +368,11 @@ class AliExpressImageSearchScraper:
 
                     context.log.info(f"   📥 Image téléchargée: {filename}")
 
-                    # Sauvegarder les métadonnées
+                    # Sauvegarder les métadonnées avec le chemin local
                     img_metadata = {
                         "src": img_url,
                         "link": product_url,
+                        "local_path": str(filepath),  # IMPORTANT: Chemin local pour CLIP
                     }
                     await img_dataset.push_data(img_metadata)
 
