@@ -3,12 +3,16 @@ Application Streamlit pour la recherche de produits AliExpress par image
 """
 import streamlit as st
 import asyncio
+import nest_asyncio
 import os
 import json
 import tempfile
 from pathlib import Path
 from datetime import datetime
 from PIL import Image
+
+# Permettre les event loops imbriqués (nécessaire sur Windows avec Streamlit)
+nest_asyncio.apply()
 
 from src.scraper.aliexpress_scraper import AliExpressImageSearchScraper
 from src.image_search.image_similarity import ImageSimilaritySearch
