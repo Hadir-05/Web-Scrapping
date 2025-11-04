@@ -5,8 +5,9 @@ Application de recherche de produits sur AliExpress par image, avec interface St
 ## 🎯 Fonctionnalités
 
 - **Upload d'Image** : Uploadez une image de produit depuis votre appareil
-- **Recherche sur AliExpress** : Recherche automatique de produits similaires sur AliExpress
-- **Scraping Intelligent** : Utilise Crawlee avec Playwright pour un scraping robuste
+- **Recherche Réelle par Image AliExpress** : Utilise la vraie fonctionnalité de recherche par image d'AliExpress
+- **Résultats Pertinents** : Obtient des produits réellement similaires (fini les shampoings quand vous cherchez un sac!)
+- **Scraping Intelligent** : Multiple stratégies de détection et upload d'image
 - **Comparaison de Similarité** : Compare votre image avec les produits trouvés en utilisant le hashing perceptuel
 - **Tri par Pertinence** : Les résultats sont automatiquement triés par score de similarité
 - **Export JSON** : Export des résultats dans deux formats JSON distincts
@@ -14,11 +15,13 @@ Application de recherche de produits sur AliExpress par image, avec interface St
 
 ## 📋 Workflow
 
-1. **Uploadez une image** de produit depuis votre ordinateur
+1. **Uploadez une image** de produit depuis votre ordinateur (ex: un sac Chanel, des chaussures, etc.)
 2. **Cliquez sur "Rechercher sur AliExpress"**
 3. L'application va :
    - Se connecter à AliExpress
-   - Rechercher des produits (via recherche par image ou recherche générale)
+   - **Utiliser la fonctionnalité native de recherche par image** d'AliExpress
+   - Uploader votre image sur AliExpress
+   - Récupérer les résultats de recherche pertinents (produits vraiment similaires)
    - Télécharger les images et informations des produits
    - Comparer chaque produit avec votre image uploadée
    - Calculer un score de similarité pour chaque produit
@@ -184,7 +187,33 @@ Pour personnaliser le scraper AliExpress, modifiez :
 - `src/scraper/aliexpress_scraper.py` : Logique de scraping
 - `src/image_search/image_similarity.py` : Algorithme de similarité
 
-## 🔍 Comment Fonctionne la Recherche par Similarité
+## 🎯 Comment Fonctionne la Recherche par Image sur AliExpress
+
+L'application utilise la fonctionnalité native de recherche par image d'AliExpress :
+
+### Processus de Recherche
+
+1. **Navigation** : L'application ouvre AliExpress.com
+2. **Détection du Bouton** : Recherche l'icône caméra dans la barre de recherche (multiple sélecteurs pour robustesse)
+3. **Upload de l'Image** : Upload votre image via le formulaire d'AliExpress
+4. **Traitement par AliExpress** : AliExpress analyse l'image et trouve des produits similaires
+5. **Extraction des Résultats** : L'application récupère les produits pertinents de la page de résultats
+
+### Stratégies de Fallback
+
+Si la méthode principale échoue :
+- Tentative sur `aliexpress.com/wholesale`
+- Tentative sur `aliexpress.us/wholesale`
+- Multiple sélecteurs CSS pour s'adapter aux changements d'interface
+
+### Avantages
+
+✅ **Pertinence** : Les résultats viennent directement d'AliExpress, garantissant une haute pertinence
+✅ **Catégorie Correcte** : Cherchez un sac Chanel → obtenez des sacs, pas des shampoings
+✅ **Robustesse** : Multiple stratégies de détection pour s'adapter aux mises à jour d'AliExpress
+✅ **Contrôle** : Vous choisissez le nombre exact de résultats (5-50)
+
+## 🔍 Comment Fonctionne la Comparaison de Similarité
 
 L'application utilise le **hashing perceptuel** pour comparer les images :
 
