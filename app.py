@@ -41,9 +41,9 @@ def init_session_state():
         st.session_state.output_dir = "output"
 
 
-def run_aliexpress_search_sync(image_path: str, max_results: int, output_dir: str):
+def run_aliexpress_search_sync(image_path: str, category: str, max_results: int, output_dir: str):
     """
-    Exécuter la recherche AliExpress par image de manière synchrone
+    Exécuter la recherche AliExpress par catégorie + image de manière synchrone
     Utilise un thread séparé avec son propre event loop pour éviter les conflits
     """
     result_container = {'result': None, 'error': None}
@@ -57,7 +57,7 @@ def run_aliexpress_search_sync(image_path: str, max_results: int, output_dir: st
             # Exécuter la recherche
             scraper = AliExpressImageSearchScraper(output_dir)
             result = loop.run_until_complete(
-                scraper.search_by_image(image_path, max_results, headless=True)
+                scraper.search_by_image(image_path, category, max_results, headless=True)
             )
             result_container['result'] = result
 
@@ -161,10 +161,21 @@ def main():
         st.markdown("### ℹ️ Comment ça marche ?")
         st.markdown("""
         1. Uploadez une image de produit
-        2. Cliquez sur "Rechercher sur AliExpress"
-        3. L'application cherchera des produits similaires
-        4. Les résultats sont triés par similarité
-        5. Téléchargez les résultats en JSON
+        2. Entrez la catégorie (bag, ring, etc.)
+        3. Cliquez sur "Rechercher sur AliExpress"
+        4. L'application cherchera des produits similaires
+        5. Les résultats sont triés par similarité
+        6. Téléchargez les résultats en JSON
+        """)
+
+        st.markdown("### 📝 Exemples de Catégories")
+        st.markdown("""
+        - **Sacs** : bag, handbag, backpack
+        - **Bijoux** : ring, necklace, earring
+        - **Vêtements** : dress, shirt, jeans
+        - **Chaussures** : shoes, sneakers, boots
+        - **Montres** : watch, smartwatch
+        - **Accessoires** : sunglasses, belt, hat
         """)
 
     # Tabs pour organiser l'interface
@@ -196,26 +207,41 @@ def main():
             with col2:
                 st.subheader("🚀 Lancer la Recherche")
 
+                # Champ de catégorie
+                st.markdown("#### 🏷️ Catégorie du Produit")
+                category = st.text_input(
+                    "Entrez la catégorie (ex: bag, ring, shoes, dress, watch)",
+                    value="",
+                    placeholder="bag",
+                    help="Spécifiez la catégorie du produit pour des résultats plus pertinents"
+                )
+
+                if not category:
+                    st.warning("⚠️ Veuillez entrer une catégorie pour obtenir des résultats pertinents (ex: bag, ring, shoes)")
+
                 st.info("""
                 **Ce que l'application va faire :**
                 - Se connecter à AliExpress
-                - Rechercher des produits similaires à votre image
+                - Rechercher des produits dans la catégorie spécifiée
                 - Télécharger les images et informations des produits
                 - Comparer la similarité avec votre image
+                - Trier par pertinence
                 """)
 
                 search_button = st.button(
                     "🔍 Rechercher sur AliExpress",
                     type="primary",
-                    use_container_width=True
+                    use_container_width=True,
+                    disabled=not category
                 )
 
-                if search_button and st.session_state.uploaded_image_path:
-                    with st.spinner("🔄 Recherche en cours sur AliExpress... Cela peut prendre plusieurs minutes."):
+                if search_button and st.session_state.uploaded_image_path and category:
+                    with st.spinner(f"🔄 Recherche de '{category}' en cours sur AliExpress... Cela peut prendre quelques minutes."):
                         try:
                             # Exécuter la recherche
                             image_metadata_list, product_data_list = run_aliexpress_search_sync(
                                 st.session_state.uploaded_image_path,
+                                category,
                                 max_results,
                                 output_dir
                             )

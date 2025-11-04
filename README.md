@@ -5,9 +5,9 @@ Application de recherche de produits sur AliExpress par image, avec interface St
 ## 🎯 Fonctionnalités
 
 - **Upload d'Image** : Uploadez une image de produit depuis votre appareil
-- **Recherche Réelle par Image AliExpress** : Utilise la vraie fonctionnalité de recherche par image d'AliExpress
+- **Recherche Hybride** : Catégorie + Image pour des résultats ultra-pertinents
 - **Résultats Pertinents** : Obtient des produits réellement similaires (fini les shampoings quand vous cherchez un sac!)
-- **Scraping Intelligent** : Multiple stratégies de détection et upload d'image
+- **Scraping Intelligent** : Recherche par texte avec catégorie spécifiée
 - **Comparaison de Similarité** : Compare votre image avec les produits trouvés en utilisant le hashing perceptuel
 - **Tri par Pertinence** : Les résultats sont automatiquement triés par score de similarité
 - **Export JSON** : Export des résultats dans deux formats JSON distincts
@@ -16,17 +16,25 @@ Application de recherche de produits sur AliExpress par image, avec interface St
 ## 📋 Workflow
 
 1. **Uploadez une image** de produit depuis votre ordinateur (ex: un sac Chanel, des chaussures, etc.)
-2. **Cliquez sur "Rechercher sur AliExpress"**
-3. L'application va :
+2. **Entrez la catégorie** du produit (ex: bag, ring, shoes, dress)
+3. **Cliquez sur "Rechercher sur AliExpress"**
+4. L'application va :
    - Se connecter à AliExpress
-   - **Utiliser la fonctionnalité native de recherche par image** d'AliExpress
-   - Uploader votre image sur AliExpress
-   - Récupérer les résultats de recherche pertinents (produits vraiment similaires)
+   - **Rechercher des produits dans la catégorie spécifiée**
    - Télécharger les images et informations des produits
    - Comparer chaque produit avec votre image uploadée
    - Calculer un score de similarité pour chaque produit
-4. **Visualisez les résultats** triés par similarité
-5. **Téléchargez les données** en JSON
+5. **Visualisez les résultats** triés par similarité (les plus similaires en premier)
+6. **Téléchargez les données** en JSON
+
+## 💡 Exemples de Catégories
+
+- **Sacs** : `bag`, `handbag`, `backpack`, `clutch`
+- **Bijoux** : `ring`, `necklace`, `earring`, `bracelet`
+- **Vêtements** : `dress`, `shirt`, `jeans`, `jacket`
+- **Chaussures** : `shoes`, `sneakers`, `boots`, `heels`
+- **Montres** : `watch`, `smartwatch`
+- **Accessoires** : `sunglasses`, `belt`, `hat`, `scarf`
 
 ## 🏗️ Structure du Projet
 
