@@ -8,8 +8,7 @@ from typing import List, Optional
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
 
-from crawlee import PlaywrightCrawler
-from crawlee.playwright_crawler import PlaywrightCrawlingContext
+from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 
 from src.models.data_models import ImageMetadata, ProductData
 
