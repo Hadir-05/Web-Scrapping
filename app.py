@@ -1,21 +1,23 @@
 """
-Application Streamlit pour le Web Scraping avec recherche par image
+Application Streamlit pour la recherche de produits AliExpress par image
 """
 import streamlit as st
 import asyncio
 import os
 import json
+import tempfile
 from pathlib import Path
 from datetime import datetime
+from PIL import Image
 
-from src.scraper.web_scraper import WebScraper
+from src.scraper.aliexpress_scraper import AliExpressImageSearchScraper
 from src.image_search.image_similarity import ImageSimilaritySearch
 from src.models.data_models import DataManager, ImageMetadata, ProductData
 
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Web Scraper avec Recherche d'Images",
+    page_title="Recherche de Produits AliExpress par Image",
     page_icon="🔍",
     layout="wide"
 )
@@ -23,20 +25,20 @@ st.set_page_config(
 
 def init_session_state():
     """Initialiser les variables de session"""
-    if 'scraper' not in st.session_state:
-        st.session_state.scraper = None
     if 'image_search' not in st.session_state:
         st.session_state.image_search = ImageSimilaritySearch()
-    if 'scraped_data' not in st.session_state:
-        st.session_state.scraped_data = None
+    if 'search_results' not in st.session_state:
+        st.session_state.search_results = None
+    if 'uploaded_image_path' not in st.session_state:
+        st.session_state.uploaded_image_path = None
     if 'output_dir' not in st.session_state:
         st.session_state.output_dir = "output"
 
 
-async def run_scraper(url: str, max_requests: int, output_dir: str):
-    """Exécuter le scraper de manière asynchrone"""
-    scraper = WebScraper(output_dir)
-    return await scraper.scrape_page(url, max_requests, headless=True)
+async def run_aliexpress_search(image_path: str, max_results: int, output_dir: str):
+    """Exécuter la recherche AliExpress par image de manière asynchrone"""
+    scraper = AliExpressImageSearchScraper(output_dir)
+    return await scraper.search_by_image(image_path, max_results, headless=True)
 
 
 def save_results(image_metadata_list, product_data_list, output_dir):
@@ -55,11 +57,41 @@ def save_results(image_metadata_list, product_data_list, output_dir):
     return image_metadata_path, product_data_path
 
 
+def calculate_similarity_scores(uploaded_image_path: str, product_data_list):
+    """Calculer les scores de similarité entre l'image uploadée et les produits trouvés"""
+    image_search = ImageSimilaritySearch()
+
+    # Ajouter toutes les images de produits à l'index
+    for product in product_data_list:
+        for img_path in product.product_image_paths:
+            if os.path.exists(img_path):
+                image_search.add_image(img_path, {
+                    'product_title': product.title,
+                    'product_url': product.item_url,
+                    'product_price': product.price
+                })
+
+    # Rechercher les images similaires
+    similar_images = image_search.search_similar(
+        uploaded_image_path,
+        top_k=len(product_data_list),
+        threshold=50  # Seuil plus permissif
+    )
+
+    # Créer un dictionnaire de scores par chemin d'image
+    similarity_scores = {}
+    for img_path, score, metadata in similar_images:
+        similarity_scores[img_path] = score
+
+    return similarity_scores
+
+
 def main():
     """Fonction principale de l'application"""
     init_session_state()
 
-    st.title("🔍 Web Scraper avec Recherche d'Images")
+    st.title("🔍 Recherche de Produits AliExpress par Image")
+    st.markdown("### Uploadez une image et trouvez des produits similaires sur AliExpress")
     st.markdown("---")
 
     # Sidebar pour la configuration
@@ -73,191 +105,221 @@ def main():
         )
         st.session_state.output_dir = output_dir
 
-        max_requests = st.slider(
-            "Nombre max de requêtes",
-            min_value=1,
-            max_value=100,
-            value=50,
-            help="Limite le nombre de pages à scraper"
+        max_results = st.slider(
+            "Nombre max de produits",
+            min_value=5,
+            max_value=50,
+            value=20,
+            help="Nombre maximum de produits à rechercher"
         )
 
         st.markdown("---")
         st.markdown("### 📊 Statistiques")
-        if st.session_state.scraped_data:
-            img_count = len(st.session_state.scraped_data[0])
-            prod_count = len(st.session_state.scraped_data[1])
-            st.metric("Images scrapées", img_count)
+        if st.session_state.search_results:
+            img_count = len(st.session_state.search_results[0])
+            prod_count = len(st.session_state.search_results[1])
+            st.metric("Images trouvées", img_count)
             st.metric("Produits trouvés", prod_count)
 
+        st.markdown("---")
+        st.markdown("### ℹ️ Comment ça marche ?")
+        st.markdown("""
+        1. Uploadez une image de produit
+        2. Cliquez sur "Rechercher sur AliExpress"
+        3. L'application cherchera des produits similaires
+        4. Les résultats sont triés par similarité
+        5. Téléchargez les résultats en JSON
+        """)
+
     # Tabs pour organiser l'interface
-    tab1, tab2, tab3 = st.tabs(["🌐 Scraping", "🖼️ Recherche d'Images", "📁 Résultats"])
+    tab1, tab2, tab3 = st.tabs(["🖼️ Recherche par Image", "📊 Résultats Détaillés", "📁 Export"])
 
-    # Tab 1: Scraping
+    # Tab 1: Recherche par Image
     with tab1:
-        st.header("Web Scraping")
+        st.header("Upload et Recherche")
 
-        url = st.text_input(
-            "URL à scraper",
-            placeholder="https://example.com",
-            help="Entrez l'URL complète de la page à scraper"
+        # Upload de l'image
+        uploaded_file = st.file_uploader(
+            "📤 Uploadez une image de produit",
+            type=['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+            help="Choisissez une image du produit que vous cherchez"
         )
 
-        col1, col2 = st.columns([1, 4])
+        if uploaded_file:
+            col1, col2 = st.columns([1, 2])
 
-        with col1:
-            scrape_button = st.button("🚀 Lancer le Scraping", type="primary")
-
-        if scrape_button and url:
-            if not url.startswith(('http://', 'https://')):
-                st.error("L'URL doit commencer par http:// ou https://")
-            else:
-                with st.spinner("Scraping en cours... Cela peut prendre quelques minutes."):
-                    try:
-                        # Exécuter le scraper
-                        image_metadata_list, product_data_list = asyncio.run(
-                            run_scraper(url, max_requests, output_dir)
-                        )
-
-                        st.session_state.scraped_data = (image_metadata_list, product_data_list)
-
-                        # Sauvegarder les résultats
-                        img_path, prod_path = save_results(
-                            image_metadata_list,
-                            product_data_list,
-                            output_dir
-                        )
-
-                        st.success(f"✅ Scraping terminé avec succès!")
-                        st.info(f"📊 {len(image_metadata_list)} images et {len(product_data_list)} produits trouvés")
-
-                        # Mettre à jour l'index de recherche d'images
-                        st.session_state.image_search.clear()
-                        images_dir = Path(output_dir) / "images"
-                        if images_dir.exists():
-                            st.session_state.image_search.add_images_from_directory(str(images_dir))
-
-                    except Exception as e:
-                        st.error(f"❌ Erreur lors du scraping: {str(e)}")
-
-        # Afficher un aperçu des résultats
-        if st.session_state.scraped_data:
-            st.markdown("---")
-            st.subheader("📋 Aperçu des résultats")
-
-            image_metadata_list, product_data_list = st.session_state.scraped_data
-
-            # Afficher quelques produits
-            if product_data_list:
-                st.markdown("#### Produits trouvés")
-                for idx, product in enumerate(product_data_list[:3]):
-                    with st.expander(f"Produit {idx + 1}: {product.title}"):
-                        col1, col2 = st.columns([1, 2])
-
-                        with col1:
-                            if os.path.exists(product.screenshot_path):
-                                st.image(product.screenshot_path, caption="Capture d'écran")
-
-                        with col2:
-                            st.write(f"**URL:** {product.item_url}")
-                            st.write(f"**Prix:** {product.price}")
-                            st.write(f"**Description:** {product.description[:200]}...")
-                            st.write(f"**Images:** {len(product.product_image_paths)}")
-
-    # Tab 2: Recherche d'Images
-    with tab2:
-        st.header("Recherche d'Images par Similarité")
-
-        if st.session_state.image_search.get_stats()['total_images'] == 0:
-            st.warning("⚠️ Aucune image dans l'index. Veuillez d'abord effectuer un scraping.")
-        else:
-            st.info(f"📊 {st.session_state.image_search.get_stats()['total_images']} images dans l'index")
-
-            # Upload d'une image pour la recherche
-            uploaded_file = st.file_uploader(
-                "Télécharger une image pour rechercher des similaires",
-                type=['png', 'jpg', 'jpeg', 'gif', 'bmp']
-            )
-
-            col1, col2 = st.columns(2)
             with col1:
-                top_k = st.slider("Nombre de résultats", 1, 20, 5)
+                st.subheader("🖼️ Votre Image")
+                st.image(uploaded_file, use_container_width=True)
+
+                # Sauvegarder temporairement l'image
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    st.session_state.uploaded_image_path = tmp_file.name
+
             with col2:
-                threshold = st.slider("Seuil de similarité", 0, 30, 10,
-                                     help="Plus bas = plus strict")
+                st.subheader("🚀 Lancer la Recherche")
 
-            if uploaded_file:
-                # Afficher l'image uploadée
-                st.subheader("🖼️ Image de recherche")
-                st.image(uploaded_file, width=300)
+                st.info("""
+                **Ce que l'application va faire :**
+                - Se connecter à AliExpress
+                - Rechercher des produits similaires à votre image
+                - Télécharger les images et informations des produits
+                - Comparer la similarité avec votre image
+                """)
 
-                if st.button("🔍 Rechercher des images similaires", type="primary"):
-                    with st.spinner("Recherche en cours..."):
+                search_button = st.button(
+                    "🔍 Rechercher sur AliExpress",
+                    type="primary",
+                    use_container_width=True
+                )
+
+                if search_button and st.session_state.uploaded_image_path:
+                    with st.spinner("🔄 Recherche en cours sur AliExpress... Cela peut prendre plusieurs minutes."):
                         try:
-                            # Rechercher des images similaires
-                            results = st.session_state.image_search.search_similar_from_bytes(
-                                uploaded_file.getvalue(),
-                                top_k=top_k,
-                                threshold=threshold
+                            # Exécuter la recherche
+                            image_metadata_list, product_data_list = asyncio.run(
+                                run_aliexpress_search(
+                                    st.session_state.uploaded_image_path,
+                                    max_results,
+                                    output_dir
+                                )
                             )
 
-                            if results:
-                                st.success(f"✅ {len(results)} image(s) similaire(s) trouvée(s)")
+                            st.session_state.search_results = (image_metadata_list, product_data_list)
 
-                                st.markdown("---")
-                                st.subheader("📊 Résultats")
+                            if product_data_list:
+                                # Sauvegarder les résultats
+                                img_path, prod_path = save_results(
+                                    image_metadata_list,
+                                    product_data_list,
+                                    output_dir
+                                )
 
-                                # Afficher les résultats
-                                for idx, (image_path, similarity, metadata) in enumerate(results):
-                                    with st.expander(f"Résultat {idx + 1} - Similarité: {similarity:.2%}"):
-                                        col1, col2 = st.columns([1, 2])
+                                st.success(f"✅ Recherche terminée avec succès!")
+                                st.info(f"📊 {len(product_data_list)} produits trouvés")
 
-                                        with col1:
-                                            if os.path.exists(image_path):
-                                                st.image(image_path, use_container_width=True)
+                                # Calculer les scores de similarité
+                                st.info("🔄 Calcul des similarités...")
+                                similarity_scores = calculate_similarity_scores(
+                                    st.session_state.uploaded_image_path,
+                                    product_data_list
+                                )
 
-                                        with col2:
-                                            st.write(f"**Chemin:** {image_path}")
-                                            st.write(f"**Score de similarité:** {similarity:.2%}")
-                                            if metadata:
-                                                st.write("**Métadonnées:**")
-                                                st.json(metadata)
+                                # Trier les produits par similarité
+                                sorted_products = []
+                                for product in product_data_list:
+                                    max_score = 0
+                                    for img_path in product.product_image_paths:
+                                        score = similarity_scores.get(img_path, 0)
+                                        max_score = max(max_score, score)
+                                    sorted_products.append((product, max_score))
+
+                                sorted_products.sort(key=lambda x: x[1], reverse=True)
+
+                                st.success("✅ Tri par similarité terminé!")
+
                             else:
-                                st.warning("Aucune image similaire trouvée avec ces critères.")
+                                st.warning("⚠️ Aucun produit trouvé. Essayez avec une autre image.")
 
                         except Exception as e:
                             st.error(f"❌ Erreur lors de la recherche: {str(e)}")
+                            st.exception(e)
 
-            # Fonction pour détecter les doublons
+        # Afficher un aperçu des résultats
+        if st.session_state.search_results and st.session_state.search_results[1]:
             st.markdown("---")
-            st.subheader("🔄 Détection de doublons")
+            st.subheader("🎯 Produits les Plus Similaires")
 
-            duplicate_threshold = st.slider(
-                "Seuil pour les doublons",
-                0, 10, 5,
-                help="Seuil pour considérer deux images comme identiques"
+            image_metadata_list, product_data_list = st.session_state.search_results
+
+            # Calculer et trier par similarité
+            similarity_scores = calculate_similarity_scores(
+                st.session_state.uploaded_image_path,
+                product_data_list
             )
 
-            if st.button("🔍 Détecter les doublons"):
-                with st.spinner("Recherche de doublons..."):
-                    duplicates = st.session_state.image_search.find_duplicates(duplicate_threshold)
+            sorted_products = []
+            for product in product_data_list:
+                max_score = 0
+                for img_path in product.product_image_paths:
+                    score = similarity_scores.get(img_path, 0)
+                    max_score = max(max_score, score)
+                sorted_products.append((product, max_score))
 
-                    if duplicates:
-                        st.warning(f"⚠️ {len(duplicates)} groupe(s) de doublons trouvé(s)")
+            sorted_products.sort(key=lambda x: x[1], reverse=True)
 
-                        for idx, group in enumerate(duplicates):
-                            with st.expander(f"Groupe {idx + 1} - {len(group)} images"):
-                                cols = st.columns(min(len(group), 4))
-                                for i, image_path in enumerate(group):
-                                    with cols[i % 4]:
-                                        if os.path.exists(image_path):
-                                            st.image(image_path, use_container_width=True)
-                                            st.caption(os.path.basename(image_path))
-                    else:
-                        st.success("✅ Aucun doublon trouvé!")
+            # Afficher les 6 meilleurs résultats
+            cols = st.columns(3)
+            for idx, (product, similarity_score) in enumerate(sorted_products[:6]):
+                with cols[idx % 3]:
+                    if product.product_image_paths and os.path.exists(product.product_image_paths[0]):
+                        st.image(product.product_image_paths[0], use_container_width=True)
 
-    # Tab 3: Résultats
+                    st.markdown(f"**{product.title[:60]}...**")
+                    st.markdown(f"💰 **Prix:** {product.price}")
+                    st.markdown(f"🎯 **Similarité:** {similarity_score:.1%}")
+
+                    if product.item_url:
+                        st.markdown(f"[🔗 Voir sur AliExpress]({product.item_url})")
+
+    # Tab 2: Résultats Détaillés
+    with tab2:
+        st.header("📋 Tous les Résultats")
+
+        if st.session_state.search_results and st.session_state.search_results[1]:
+            image_metadata_list, product_data_list = st.session_state.search_results
+
+            # Calculer les similarités
+            similarity_scores = calculate_similarity_scores(
+                st.session_state.uploaded_image_path,
+                product_data_list
+            )
+
+            sorted_products = []
+            for product in product_data_list:
+                max_score = 0
+                for img_path in product.product_image_paths:
+                    score = similarity_scores.get(img_path, 0)
+                    max_score = max(max_score, score)
+                sorted_products.append((product, max_score))
+
+            sorted_products.sort(key=lambda x: x[1], reverse=True)
+
+            # Afficher tous les produits
+            for idx, (product, similarity_score) in enumerate(sorted_products):
+                with st.expander(f"🔢 Produit {idx + 1} - {product.title} - Similarité: {similarity_score:.1%}"):
+                    col1, col2 = st.columns([1, 2])
+
+                    with col1:
+                        if product.product_image_paths and os.path.exists(product.product_image_paths[0]):
+                            st.image(product.product_image_paths[0], use_container_width=True)
+
+                        if os.path.exists(product.screenshot_path):
+                            st.caption("Capture d'écran")
+                            st.image(product.screenshot_path, use_container_width=True)
+
+                    with col2:
+                        st.markdown(f"### {product.title}")
+                        st.markdown(f"**💰 Prix:** {product.price}")
+                        st.markdown(f"**🎯 Score de Similarité:** {similarity_score:.2%}")
+                        st.markdown(f"**🔗 URL:** {product.item_url}")
+                        st.markdown(f"**📅 Date de collecte:** {product.collection_date.strftime('%Y-%m-%d %H:%M')}")
+
+                        if product.description:
+                            st.markdown(f"**📝 Description:** {product.description}")
+
+                        st.markdown(f"**🖼️ Nombre d'images:** {len(product.product_image_paths)}")
+
+                        if product.item_url:
+                            st.markdown(f"[➡️ Voir le produit sur AliExpress]({product.item_url})")
+
+        else:
+            st.info("ℹ️ Aucun résultat disponible. Uploadez une image et lancez la recherche.")
+
+    # Tab 3: Export
     with tab3:
-        st.header("Fichiers de Résultats")
+        st.header("📁 Fichiers de Résultats")
 
         output_path = Path(st.session_state.output_dir)
 
@@ -314,7 +376,7 @@ def main():
 
             # Section pour les images
             st.markdown("---")
-            st.subheader("🖼️ Images scrapées")
+            st.subheader("🖼️ Images téléchargées")
 
             images_dir = output_path / "images"
             if images_dir.exists():
@@ -349,7 +411,7 @@ def main():
                             st.caption(image_file.name)
 
         else:
-            st.info("ℹ️ Aucun résultat disponible. Veuillez d'abord effectuer un scraping.")
+            st.info("ℹ️ Aucun résultat disponible. Uploadez une image et lancez la recherche.")
 
 
 if __name__ == "__main__":

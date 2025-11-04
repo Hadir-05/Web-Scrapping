@@ -1,108 +1,150 @@
-# Web Scraper avec Recherche d'Images
+# Recherche de Produits AliExpress par Image
 
-Application de web scraping avec interface Streamlit, utilisant Crawlee pour le scraping et recherche par similarité d'images.
+Application de recherche de produits sur AliExpress par image, avec interface Streamlit et comparaison de similarité.
 
-## Fonctionnalités
+## 🎯 Fonctionnalités
 
-- **Web Scraping** : Extraction automatique de produits et images depuis n'importe quel site web
-- **Scraping avec Crawlee** : Utilisation de Crawlee avec Playwright pour un scraping robuste
-- **Recherche par image** : Recherche d'images similaires utilisant le hashing perceptuel
-- **Interface Streamlit** : Interface web intuitive et facile à utiliser
+- **Upload d'Image** : Uploadez une image de produit depuis votre appareil
+- **Recherche sur AliExpress** : Recherche automatique de produits similaires sur AliExpress
+- **Scraping Intelligent** : Utilise Crawlee avec Playwright pour un scraping robuste
+- **Comparaison de Similarité** : Compare votre image avec les produits trouvés en utilisant le hashing perceptuel
+- **Tri par Pertinence** : Les résultats sont automatiquement triés par score de similarité
 - **Export JSON** : Export des résultats dans deux formats JSON distincts
-- **Détection de doublons** : Identification automatique des images en double
+- **Interface Intuitive** : Interface web Streamlit facile à utiliser
 
-## Structure du Projet
+## 📋 Workflow
+
+1. **Uploadez une image** de produit depuis votre ordinateur
+2. **Cliquez sur "Rechercher sur AliExpress"**
+3. L'application va :
+   - Se connecter à AliExpress
+   - Rechercher des produits (via recherche par image ou recherche générale)
+   - Télécharger les images et informations des produits
+   - Comparer chaque produit avec votre image uploadée
+   - Calculer un score de similarité pour chaque produit
+4. **Visualisez les résultats** triés par similarité
+5. **Téléchargez les données** en JSON
+
+## 🏗️ Structure du Projet
 
 ```
 Web-Scrapping/
 ├── src/
-│   ├── scraper/          # Module de scraping avec Crawlee
-│   ├── image_search/     # Module de recherche par image
-│   ├── models/           # Modèles de données
-│   └── ui/               # Composants UI (extensible)
-├── output/               # Résultats du scraping
-│   ├── images/           # Images téléchargées
+│   ├── scraper/
+│   │   ├── aliexpress_scraper.py    # Scraper spécialisé pour AliExpress
+│   │   └── web_scraper.py           # Scraper générique (optionnel)
+│   ├── image_search/
+│   │   └── image_similarity.py      # Recherche par similarité d'images
+│   ├── models/
+│   │   └── data_models.py           # Modèles de données
+│   └── ui/
+├── output/                           # Résultats
+│   ├── images/                       # Images téléchargées
 │   ├── image_metadata.json
 │   └── product_data.json
-├── app.py                # Application Streamlit principale
-├── requirements.txt      # Dépendances Python
-└── README.md             # Ce fichier
+├── app.py                            # Application Streamlit principale
+├── requirements.txt
+└── README.md
 ```
 
-## Installation
+## ⚙️ Installation
 
 ### Prérequis
 
 - Python 3.8 ou supérieur
 - pip
+- Connexion internet
 
-### Étapes d'installation
+### Installation Complète
 
-1. Cloner le repository :
+#### Sur Windows :
+
 ```bash
-git clone <url-du-repo>
+# 1. Cloner le repository
+git clone https://github.com/Hadir-05/Web-Scrapping.git
 cd Web-Scrapping
-```
+git checkout claude/rebuild-repo-from-scratch-011CUnfUeYm5HTQ3ToQ9tZZz
 
-2. Créer un environnement virtuel (recommandé) :
-```bash
+# 2. Créer un environnement virtuel
 python -m venv venv
-source venv/bin/activate  # Sur Windows: venv\Scripts\activate
-```
+venv\Scripts\activate
 
-3. Installer les dépendances :
-```bash
+# 3. Installer les dépendances
+pip install --upgrade pip
 pip install -r requirements.txt
+
+# 4. Installer les navigateurs Playwright
+playwright install chromium
 ```
 
-4. Installer les navigateurs Playwright :
+#### Sur Linux/Mac :
+
 ```bash
-playwright install
+# 1. Cloner le repository
+git clone https://github.com/Hadir-05/Web-Scrapping.git
+cd Web-Scrapping
+git checkout claude/rebuild-repo-from-scratch-011CUnfUeYm5HTQ3ToQ9tZZz
+
+# 2. Créer un environnement virtuel
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Installer les dépendances
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Installer les navigateurs Playwright
+playwright install chromium
 ```
 
-## Utilisation
+## 🚀 Utilisation
 
-### Lancer l'application
+### Lancer l'Application
 
 ```bash
 streamlit run app.py
 ```
 
-L'application sera accessible à l'adresse : `http://localhost:8501`
+L'application s'ouvrira automatiquement dans votre navigateur à l'adresse : `http://localhost:8501`
 
-### Fonctionnalités de l'interface
+### Guide d'Utilisation
 
-#### 1. Onglet Scraping
+#### 1. Onglet "Recherche par Image"
 
-- Entrez l'URL du site à scraper
-- Configurez le nombre maximum de requêtes
-- Lancez le scraping
-- Visualisez un aperçu des résultats
+- Cliquez sur "Browse files" pour uploader une image
+- L'image s'affichera à gauche
+- Cliquez sur "Rechercher sur AliExpress"
+- Attendez que la recherche se termine (peut prendre quelques minutes)
+- Les 6 meilleurs résultats s'affichent automatiquement
 
-#### 2. Onglet Recherche d'Images
+#### 2. Onglet "Résultats Détaillés"
 
-- Téléchargez une image de référence
-- Ajustez le seuil de similarité
-- Recherchez des images similaires dans la base
-- Détectez les doublons
+- Voir tous les produits trouvés
+- Chaque produit affiche :
+  - Image du produit
+  - Titre
+  - Prix
+  - Score de similarité avec votre image
+  - Lien vers AliExpress
+  - Date de collecte
 
-#### 3. Onglet Résultats
+#### 3. Onglet "Export"
 
-- Visualisez les fichiers JSON générés
-- Téléchargez les résultats
-- Parcourez la galerie d'images
+- Télécharger les fichiers JSON
+- Visualiser la galerie d'images
+- Voir un aperçu des données
 
-## Formats de sortie
+## 📦 Formats de Sortie
 
 ### 1. image_metadata.json
 
-Contient les métadonnées basiques des images :
+Contient les métadonnées basiques des images trouvées :
 
 ```json
 [
   {
-    "src": "https://example.com/image.jpg",
-    "link": "https://example.com/product"
+    "src": "https://ae01.alicdn.com/kf/example.jpg",
+    "link": "https://www.aliexpress.com/item/12345.html"
   }
 ]
 ```
@@ -114,12 +156,12 @@ Contient les données complètes des produits :
 ```json
 [
   {
-    "item_url": "https://example.com/product",
-    "collection_date": "2024-01-01T12:00:00",
-    "src_image": "https://example.com/main-image.jpg",
-    "title": "Product Title",
+    "item_url": "https://www.aliexpress.com/item/12345.html",
+    "collection_date": "2024-01-15T14:30:00",
+    "src_image": "https://ae01.alicdn.com/kf/example.jpg",
+    "title": "Product Name",
     "description": "Product description...",
-    "price": "$99.99",
+    "price": "$19.99",
     "screenshot_path": "output/images/screenshot_product_1.png",
     "product_image_paths": [
       "output/images/image_0001.jpg",
@@ -129,69 +171,102 @@ Contient les données complètes des produits :
 ]
 ```
 
-## Personnalisation
+## 🔧 Configuration
 
-### Adapter le scraper pour un site spécifique
+### Paramètres Ajustables (Sidebar)
 
-Le scraper est conçu de manière générique pour fonctionner avec la plupart des sites web. Pour l'adapter à un site spécifique, modifiez la méthode `_extract_product_data` dans `src/scraper/web_scraper.py`.
+- **Répertoire de sortie** : Où sauvegarder les résultats (défaut: `output`)
+- **Nombre max de produits** : Combien de produits rechercher (5-50, défaut: 20)
 
-### Changer le modèle de similarité
+### Personnalisation Avancée
 
-Le module actuel utilise le hashing perceptuel. Pour utiliser votre propre modèle de similarité :
+Pour personnaliser le scraper AliExpress, modifiez :
+- `src/scraper/aliexpress_scraper.py` : Logique de scraping
+- `src/image_search/image_similarity.py` : Algorithme de similarité
 
-1. Créez une nouvelle classe dans `src/image_search/`
-2. Implémentez les méthodes `add_image` et `search_similar`
-3. Remplacez `ImageSimilaritySearch` dans `app.py`
+## 🔍 Comment Fonctionne la Recherche par Similarité
 
-## Architecture
+L'application utilise le **hashing perceptuel** pour comparer les images :
 
-### Module Scraper
+1. **Calcul des Hashes** : Pour chaque image (la vôtre et celles trouvées), 4 types de hash sont calculés :
+   - Average Hash (ahash)
+   - Perceptual Hash (phash) - le plus fiable
+   - Difference Hash (dhash)
+   - Wavelet Hash (whash)
 
-- Utilise **Crawlee** avec Playwright pour naviguer et extraire les données
-- Télécharge automatiquement les images
-- Prend des captures d'écran
-- Gère les URLs relatives et absolues
+2. **Comparaison** : Les hashes de votre image sont comparés avec ceux des produits
 
-### Module Image Search
+3. **Score de Similarité** : Un score de 0% à 100% est calculé :
+   - 100% = Images identiques
+   - 80-100% = Très similaires
+   - 60-80% = Similaires
+   - <60% = Peu similaires
 
-- Utilise plusieurs algorithmes de hashing (ahash, phash, dhash, whash)
-- Compare les images par similarité perceptuelle
-- Détecte les doublons
-- Recherche rapide dans de grandes collections
+4. **Tri** : Les produits sont triés du plus similaire au moins similaire
 
-### Modèles de Données
+## 🛠️ Technologies Utilisées
 
-- `ImageMetadata` : Métadonnées simples des images
-- `ProductData` : Données complètes des produits
-- `DataManager` : Gestion de la sérialisation/désérialisation JSON
-
-## Technologies Utilisées
-
+- **Python 3.8+**
+- **Streamlit** : Interface web
 - **Crawlee** : Framework de web scraping
 - **Playwright** : Automatisation de navigateur
-- **Streamlit** : Interface web
 - **PIL/Pillow** : Traitement d'images
 - **ImageHash** : Hashing perceptuel d'images
+- **Pydantic** : Validation de données
 
-## Limitations et Notes
+## ⚠️ Limitations et Notes
 
-- Le scraping peut être lent pour de grandes collections
-- Certains sites peuvent bloquer le scraping (respectez les robots.txt)
-- La recherche par image utilise le hashing perceptuel (adapté pour les doublons et images similaires)
-- Pour une similarité sémantique plus avancée, envisagez d'utiliser des modèles de deep learning
+- **Temps de recherche** : La recherche peut prendre 2-5 minutes selon le nombre de produits
+- **Respect des ToS** : Utilisez l'application de manière responsable et respectez les conditions d'utilisation d'AliExpress
+- **Qualité de l'image** : Pour de meilleurs résultats, utilisez des images claires et nettes
+- **Connexion** : Une connexion internet stable est requise
+- **Headless Mode** : Par défaut, le navigateur s'exécute en arrière-plan (headless=True)
 
-## Développement Futur
+## 🔮 Développement Futur
 
-- [ ] Intégration de modèles de deep learning pour la similarité d'images
-- [ ] Support de la parallélisation du scraping
-- [ ] Cache des résultats de scraping
-- [ ] Export vers d'autres formats (CSV, Excel)
-- [ ] API REST pour l'automatisation
+- [ ] Support de multiples plateformes (Amazon, eBay, etc.)
+- [ ] Intégration de modèles de deep learning (ResNet, EfficientNet)
+- [ ] Cache des résultats
+- [ ] Comparaison de prix entre plateformes
+- [ ] API REST
+- [ ] Mode batch pour traiter plusieurs images
 
-## Licence
+## 🤝 Personnalisation avec Votre Modèle
+
+Pour remplacer le système de similarité actuel par votre propre modèle :
+
+1. Créez une nouvelle classe dans `src/image_search/`
+2. Implémentez les méthodes :
+   ```python
+   def add_image(self, image_path, metadata)
+   def search_similar(self, query_image_path, top_k, threshold)
+   ```
+3. Remplacez `ImageSimilaritySearch` dans `app.py:62` par votre classe
+
+## 📝 Licence
 
 MIT
 
-## Contribution
+## 🐛 Problèmes Connus
 
-Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
+Si vous rencontrez des erreurs :
+
+1. **Erreur d'import Crawlee** :
+   ```bash
+   pip uninstall crawlee -y
+   pip install crawlee[playwright]==1.0.4
+   ```
+
+2. **Playwright non installé** :
+   ```bash
+   playwright install chromium --with-deps
+   ```
+
+3. **Permissions** : Sur Linux, vous pourriez avoir besoin de :
+   ```bash
+   sudo playwright install-deps
+   ```
+
+## 📧 Support
+
+Pour toute question ou problème, ouvrez une issue sur GitHub.
