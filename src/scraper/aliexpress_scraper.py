@@ -386,7 +386,7 @@ class AliExpressImageSearchScraper:
                 if price == "N/A":
                     context.log.warning("   ⚠️ Prix non trouvé avec toutes les stratégies")
 
-                # Images produit - Stratégies multiples inspirées du code professionnel
+                # Images produit - Extraction robuste avec filtrage des thumbnails
                 context.log.info("   🖼️ Extraction des images...")
                 img_links = []
 
@@ -396,16 +396,44 @@ class AliExpressImageSearchScraper:
                     product_imgs = await page.locator("div[class^=slider--img] > img").all()
                     context.log.info(f"         Trouvé: {len(product_imgs)} images avec sélecteur slider")
 
-                    for pimg in product_imgs[:3]:  # Max 3 images
+                    for idx, pimg in enumerate(product_imgs[:5], 1):  # Prendre 5 pour avoir marge
+                        # Essayer src
                         src = await pimg.get_attribute("src")
+                        context.log.info(f"         Image {idx} src: {src[:80] if src else 'None'}...")
+
+                        # Essayer data-src si src est vide
+                        if not src:
+                            src = await pimg.get_attribute("data-src")
+                            context.log.info(f"         Image {idx} data-src: {src[:80] if src else 'None'}...")
+
                         if src and 'alicdn' in src:
-                            img_links.append(src)
-                            context.log.info(f"         ✅ {src[:70]}...")
+                            # Filtrer les thumbnails et petites images
+                            # Ignorer si contient: 150x150, 50x50, 100x100, ou dimensions < 200 dans le nom
+                            if any(x in src for x in ['150x150', '50x50', '100x100', '_50.', '_100.']):
+                                context.log.info(f"            ⚠️ Ignoré (thumbnail)")
+                                continue
+
+                            # Ignorer les URLs de moins de 80 caractères (généralement des icônes)
+                            if len(src) < 80:
+                                context.log.info(f"            ⚠️ Ignoré (URL trop courte - probablement icône)")
+                                continue
+
+                            # Améliorer la qualité: remplacer _xxxxx par version haute résolution
+                            src_hq = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                            src_hq = src_hq.replace('.webp', '.jpg')  # Préférer JPG
+
+                            img_links.append(src_hq)
+                            context.log.info(f"         ✅ Ajoutée: {src_hq[:70]}...")
+
+                            if len(img_links) >= 3:
+                                break
 
                     if len(img_links) > 0:
                         context.log.info(f"      ✅ {len(img_links)} images extraites avec sélecteur slider")
                 except Exception as e:
                     context.log.info(f"      Sélecteur slider échoué: {e}")
+                    import traceback
+                    context.log.info(f"      {traceback.format_exc()[:200]}")
 
                 # STRATÉGIE 2: Variantes du sélecteur slider
                 if len(img_links) == 0:
@@ -437,7 +465,7 @@ class AliExpressImageSearchScraper:
                         except Exception as e:
                             context.log.info(f"         Échoué: {e}")
 
-                # STRATÉGIE 3: JavaScript comprehensive search
+                # STRATÉGIE 3: JavaScript comprehensive search avec filtrage
                 if len(img_links) == 0:
                     context.log.info("      Stratégie 3: JavaScript comprehensive search...")
                     try:
@@ -445,26 +473,61 @@ class AliExpressImageSearchScraper:
                             const images = [];
                             const seen = new Set();
 
-                            // Priorité: chercher dans les divs slider
+                            // Fonction pour filtrer les mauvaises images
+                            function isValidProductImage(src) {
+                                // Doit contenir alicdn
+                                if (!src || !src.includes('alicdn')) return false;
+
+                                // Ignorer les thumbnails
+                                if (src.includes('150x150') || src.includes('50x50') ||
+                                    src.includes('100x100') || src.includes('_50.') ||
+                                    src.includes('_100.')) {
+                                    return false;
+                                }
+
+                                // Ignorer les URLs courtes (icônes, logos)
+                                if (src.length < 80) return false;
+
+                                // Ignorer les dimensions très petites dans le nom du fichier
+                                // Ex: xxx-32-32.png, xxx-21-21.png
+                                if (src.match(/\\d{1,3}-\\d{1,3}\\.(png|jpg|webp)$/)) {
+                                    const match = src.match(/(\\d{1,3})-(\\d{1,3})\\.(png|jpg|webp)$/);
+                                    if (match) {
+                                        const w = parseInt(match[1]);
+                                        const h = parseInt(match[2]);
+                                        if (w < 200 || h < 200) return false;
+                                    }
+                                }
+
+                                return true;
+                            }
+
+                            // Priorité 1: Chercher dans les divs slider avec attribut class contenant 'slider' ou 'image'
                             const sliderImgs = document.querySelectorAll('div[class*="slider"] img, div[class*="image"] img');
                             for (let img of sliderImgs) {
                                 const src = img.src || img.getAttribute('src') || img.getAttribute('data-src');
-                                if (src && src.includes('alicdn') && !seen.has(src)) {
-                                    images.push(src);
+                                if (isValidProductImage(src) && !seen.has(src)) {
+                                    // Améliorer la qualité
+                                    const srcHQ = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '').replace('.webp', '.jpg');
+                                    images.push(srcHQ);
                                     seen.add(src);
                                     if (images.length >= 3) return images;
                                 }
                             }
 
-                            // Fallback: toutes les images alicdn
-                            if (images.length === 0) {
+                            // Priorité 2: Chercher les grandes images (largeur ou hauteur naturelle > 300px)
+                            if (images.length < 3) {
                                 const allImgs = document.querySelectorAll('img');
                                 for (let img of allImgs) {
                                     const src = img.src || img.getAttribute('src') || img.getAttribute('data-src');
-                                    if (src && src.includes('alicdn') && !seen.has(src)) {
-                                        images.push(src);
-                                        seen.add(src);
-                                        if (images.length >= 3) break;
+                                    if (isValidProductImage(src) && !seen.has(src)) {
+                                        // Vérifier les dimensions naturelles si disponibles
+                                        if (img.naturalWidth > 300 || img.naturalHeight > 300) {
+                                            const srcHQ = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '').replace('.webp', '.jpg');
+                                            images.push(srcHQ);
+                                            seen.add(src);
+                                            if (images.length >= 3) break;
+                                        }
                                     }
                                 }
                             }
@@ -474,11 +537,13 @@ class AliExpressImageSearchScraper:
 
                         if imgs_js and len(imgs_js) > 0:
                             img_links = imgs_js[:3]
-                            context.log.info(f"      ✅ {len(img_links)} images trouvées avec JavaScript")
+                            context.log.info(f"      ✅ {len(img_links)} images trouvées avec JavaScript (filtrées)")
                             for idx, url in enumerate(img_links):
                                 context.log.info(f"         {idx+1}. {url[:70]}...")
                     except Exception as e:
                         context.log.info(f"      JavaScript échoué: {e}")
+                        import traceback
+                        context.log.info(f"      {traceback.format_exc()[:200]}")
 
                 context.log.info(f"   📊 TOTAL: {len(img_links)} images à télécharger")
 
