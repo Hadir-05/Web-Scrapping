@@ -223,23 +223,29 @@ Si la méthode principale échoue :
 
 ## 🔍 Comment Fonctionne la Comparaison de Similarité
 
-L'application utilise le **hashing perceptuel** pour comparer les images :
+L'application utilise **CLIP (Contrastive Language-Image Pre-training)** pour une similarité d'images de haute qualité :
 
-1. **Calcul des Hashes** : Pour chaque image (la vôtre et celles trouvées), 4 types de hash sont calculés :
-   - Average Hash (ahash)
-   - Perceptual Hash (phash) - le plus fiable
-   - Difference Hash (dhash)
-   - Wavelet Hash (whash)
+### Technologie CLIP
 
-2. **Comparaison** : Les hashes de votre image sont comparés avec ceux des produits
+1. **Modèle Utilisé** : ViT-L-14 pré-entraîné sur Laion2B (2 milliards d'images)
+2. **Embeddings** : Chaque image est convertie en vecteur de 768 dimensions
+3. **Similarité Cosinus** : Comparaison vectorielle pour un score de 0 à 1
+4. **Avantages** :
+   - ✅ Comprend le contenu sémantique (pas seulement les pixels)
+   - ✅ Robuste aux variations de couleur, rotation, échelle
+   - ✅ Scores plus précis que le hashing perceptuel
 
-3. **Score de Similarité** : Un score de 0% à 100% est calculé :
-   - 100% = Images identiques
-   - 80-100% = Très similaires
-   - 60-80% = Similaires
-   - <60% = Peu similaires
+### Interprétation des Scores CLIP
 
-4. **Tri** : Les produits sont triés du plus similaire au moins similaire
+- **0.8 - 1.0** : Extrêmement similaire (même produit ou variante)
+- **0.6 - 0.8** : Très similaire (même catégorie, design proche)
+- **0.4 - 0.6** : Modérément similaire (même catégorie générale)
+- **0.2 - 0.4** : Faiblement similaire (quelques caractéristiques communes)
+- **0.0 - 0.2** : Très différent
+
+### Fallback: Hashing Perceptuel
+
+Si CLIP n'est pas disponible, le système utilise le hashing perceptuel (ahash, phash, dhash, whash) comme fallback
 
 ## 🛠️ Technologies Utilisées
 
@@ -247,9 +253,12 @@ L'application utilise le **hashing perceptuel** pour comparer les images :
 - **Streamlit** : Interface web
 - **Crawlee** : Framework de web scraping
 - **Playwright** : Automatisation de navigateur
+- **CLIP (OpenCLIP)** : Similarité d'images par deep learning
+- **PyTorch** : Backend pour CLIP
 - **PIL/Pillow** : Traitement d'images
-- **ImageHash** : Hashing perceptuel d'images
+- **ImageHash** : Hashing perceptuel d'images (fallback)
 - **Pydantic** : Validation de données
+- **scikit-learn** : Calcul de similarité cosinus
 
 ## ⚠️ Limitations et Notes
 
@@ -284,6 +293,70 @@ Pour remplacer le système de similarité actuel par votre propre modèle :
 
 MIT
 
+## 🔧 Dépannage et Diagnostic
+
+### Outils de Diagnostic Intégrés
+
+Si vous rencontrez des problèmes (ex: score CLIP = 0%, prix manquants, images non affichées), utilisez nos outils de diagnostic:
+
+#### 1. Test CLIP Complet
+
+```bash
+python test_clip.py
+```
+
+Ce script vérifie:
+- ✅ Installation de CLIP et PyTorch
+- ✅ Chargement du modèle ViT-L-14
+- ✅ Calcul d'embeddings
+- ✅ Calcul de similarité
+- ✅ Vos modules personnalisés
+
+**Si ce test échoue**, réinstallez CLIP:
+```bash
+pip install --upgrade open-clip-torch torch torchvision
+```
+
+#### 2. Inspection du Dossier Output
+
+```bash
+python inspect_output.py
+```
+
+Ce script analyse:
+- 📦 `product_data.json` (nombre de produits, prix, images)
+- 🖼️ `image_metadata.json` (présence de `local_path`, mappings)
+- 📁 Structure du dossier `images/` (organisation par produit)
+- ✅ Correspondance fichiers/métadonnées
+
+**Détecte automatiquement:**
+- Champs manquants dans les JSON
+- Images non téléchargées
+- Chemins incorrects
+- Structure de dossiers obsolète
+
+#### 3. Logs Détaillés de l'Application
+
+Lancez l'app et regardez le terminal:
+```bash
+streamlit run app.py
+```
+
+Les logs afficheront:
+- Nombre d'images indexées dans CLIP
+- Scores de similarité pour chaque image
+- Problèmes de téléchargement
+- Erreurs de parsing
+
+### Documentation Complète de Dépannage
+
+Pour un guide détaillé, consultez **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** qui couvre:
+- Score CLIP = 0% (causes et solutions)
+- Prix non affichés
+- Images manquantes
+- Organisation des images
+- Checklist de vérification complète
+
 ## 🐛 Problèmes Connus
 
 Si vous rencontrez des erreurs :
@@ -303,6 +376,13 @@ Si vous rencontrez des erreurs :
    ```bash
    sudo playwright install-deps
    ```
+
+4. **CLIP Score = 0%** :
+   ```bash
+   python test_clip.py  # Test diagnostic
+   python inspect_output.py  # Vérifier les données
+   ```
+   Consultez [TROUBLESHOOTING.md](TROUBLESHOOTING.md) pour plus de détails
 
 ## 📧 Support
 
