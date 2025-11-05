@@ -465,27 +465,45 @@ def main():
 
             # Afficher tous les produits avec image représentative
             for idx, (product, similarity_score) in enumerate(sorted_products):
-                # Récupérer la première image locale comme image représentative
+                # Récupérer la première image (locale ou URL) comme image représentative
                 representative_image = None
                 local_image_paths = []
+                image_paths_to_display = []  # Pour l'expander (local ou URL)
+
                 for img_url in product.product_image_paths[:5]:  # Chercher dans les 5 premières
                     local_path = url_to_local_path.get(img_url, img_url)
+
+                    # Vérifier si l'image existe localement
                     if os.path.exists(local_path):
                         if representative_image is None:
                             representative_image = local_path
                         local_image_paths.append(local_path)
+                        image_paths_to_display.append(local_path)
+                    else:
+                        # Fallback: utiliser l'URL en ligne
+                        if representative_image is None and img_url:
+                            representative_image = img_url  # Streamlit peut afficher des URLs!
+                        if img_url:
+                            image_paths_to_display.append(img_url)
 
                 # Créer une carte visuelle avec image + info de base
                 col_img, col_info = st.columns([1, 3])
 
                 with col_img:
-                    # Afficher l'image représentative
+                    # Afficher l'image représentative (locale ou URL)
                     if representative_image:
-                        st.image(representative_image, use_container_width=True)
+                        try:
+                            st.image(representative_image, use_container_width=True)
+                            # Petit indicateur si c'est une URL en ligne
+                            if not os.path.exists(str(representative_image)):
+                                st.caption("🌐 Image en ligne")
+                        except Exception as e:
+                            st.markdown("### 🖼️")
+                            st.caption(f"Erreur: {str(e)[:30]}")
                     else:
-                        # Placeholder si pas d'image
+                        # Vraiment aucune image disponible
                         st.markdown("### 🖼️")
-                        st.caption("Pas d'image")
+                        st.caption("Aucune image")
 
                 with col_info:
                     # Info de base visible
@@ -497,15 +515,23 @@ def main():
 
                 # Expander pour les détails complets
                 with st.expander(f"📋 Voir les détails complets du produit {idx + 1}"):
-                    # Section images: toutes les images disponibles
-                    if local_image_paths and len(local_image_paths) > 1:
+                    # Section images: toutes les images disponibles (locales ou URLs)
+                    if image_paths_to_display and len(image_paths_to_display) > 1:
                         st.markdown("### 🖼️ Toutes les Images du Produit")
                         # Afficher en colonnes (max 3 par ligne)
-                        for i in range(0, len(local_image_paths), 3):
-                            cols = st.columns(min(3, len(local_image_paths) - i))
-                            for j, img_path in enumerate(local_image_paths[i:i+3]):
+                        for i in range(0, len(image_paths_to_display), 3):
+                            cols = st.columns(min(3, len(image_paths_to_display) - i))
+                            for j, img_path in enumerate(image_paths_to_display[i:i+3]):
                                 with cols[j]:
-                                    st.image(img_path, use_container_width=True, caption=f"Image {i+j+1}")
+                                    try:
+                                        # Indiquer si c'est local ou en ligne
+                                        is_local = os.path.exists(str(img_path))
+                                        caption = f"Image {i+j+1}"
+                                        if not is_local:
+                                            caption += " 🌐"
+                                        st.image(img_path, use_container_width=True, caption=caption)
+                                    except Exception as e:
+                                        st.error(f"Erreur image {i+j+1}")
                         st.markdown("---")
 
                     # Section détails
@@ -525,7 +551,9 @@ def main():
                             st.markdown(f"[➡️ Voir sur AliExpress]({product.item_url})")
                             st.code(product.item_url, language=None)
 
-                        st.markdown(f"**🖼️ Images disponibles:** {len(local_image_paths)}/{len(product.product_image_paths)}")
+                        st.markdown(f"**🖼️ Images locales:** {len(local_image_paths)}/{len(product.product_image_paths)}")
+                        if len(local_image_paths) < len(image_paths_to_display):
+                            st.caption(f"🌐 {len(image_paths_to_display) - len(local_image_paths)} images affichées depuis internet")
 
                     if product.description and product.description != product.title:
                         st.markdown("### 📝 Description")
