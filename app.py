@@ -378,6 +378,20 @@ def main():
         if st.session_state.search_results and st.session_state.search_results[1]:
             image_metadata_list, product_data_list = st.session_state.search_results
 
+            # Charger le mapping URL → local path
+            output_path = Path(st.session_state.output_dir)
+            image_metadata_path = output_path / "image_metadata.json"
+            url_to_local_path = {}
+
+            if image_metadata_path.exists():
+                with open(image_metadata_path, 'r', encoding='utf-8') as f:
+                    image_metadata = json.load(f)
+                    for img_meta in image_metadata:
+                        url = img_meta.get('src', '')
+                        local_path = img_meta.get('local_path', '')
+                        if url and local_path:
+                            url_to_local_path[url] = local_path
+
             # Calculer les similarités
             similarity_scores = calculate_similarity_scores(
                 st.session_state.uploaded_image_path,
@@ -397,128 +411,240 @@ def main():
 
             # Afficher tous les produits
             for idx, (product, similarity_score) in enumerate(sorted_products):
-                with st.expander(f"🔢 Produit {idx + 1} - {product.title} - CLIP: {similarity_score:.1%}"):
-                    col1, col2 = st.columns([1, 2])
+                with st.expander(f"🔢 Produit {idx + 1} - {product.title[:80]} - CLIP: {similarity_score:.1%}"):
+                    # Section images: 3 premières images
+                    st.markdown("### 🖼️ Images du Produit")
+
+                    # Récupérer les 3 premières images locales
+                    local_image_paths = []
+                    for img_url in product.product_image_paths[:3]:
+                        local_path = url_to_local_path.get(img_url, img_url)
+                        if os.path.exists(local_path):
+                            local_image_paths.append(local_path)
+
+                    if local_image_paths:
+                        # Afficher en colonnes
+                        cols = st.columns(len(local_image_paths))
+                        for i, img_path in enumerate(local_image_paths):
+                            with cols[i]:
+                                st.image(img_path, use_container_width=True, caption=f"Image {i+1}")
+                    else:
+                        st.warning("Aucune image disponible localement")
+
+                    st.markdown("---")
+
+                    # Section détails
+                    col1, col2 = st.columns([1, 1])
 
                     with col1:
-                        if product.product_image_paths and os.path.exists(product.product_image_paths[0]):
-                            st.image(product.product_image_paths[0], use_container_width=True)
-
-                        if os.path.exists(product.screenshot_path):
-                            st.caption("Capture d'écran")
-                            st.image(product.screenshot_path, use_container_width=True)
+                        st.markdown("### 📊 Informations Produit")
+                        st.markdown(f"**🏷️ Nom:** {product.title}")
+                        st.markdown(f"**💰 Prix:** {product.price}")
+                        st.markdown(f"**🧠 Score CLIP:** {similarity_score:.2%}")
+                        st.caption("Score calculé avec CLIP ViT-L-14 (Laion2B)")
+                        st.markdown(f"**📅 Date:** {product.collection_date.strftime('%Y-%m-%d %H:%M')}")
 
                     with col2:
-                        st.markdown(f"### {product.title}")
-                        st.markdown(f"**💰 Prix:** {product.price}")
-                        st.markdown(f"**🧠 CLIP Similarity Score:** {similarity_score:.2%}")
-                        st.caption("Score calculé avec CLIP ViT-L-14 (Laion2B) - Similarité cosinus")
-                        st.markdown(f"**🔗 URL:** {product.item_url}")
-                        st.markdown(f"**📅 Date de collecte:** {product.collection_date.strftime('%Y-%m-%d %H:%M')}")
-
-                        if product.description:
-                            st.markdown(f"**📝 Description:** {product.description}")
-
-                        st.markdown(f"**🖼️ Nombre d'images:** {len(product.product_image_paths)}")
-
+                        st.markdown("### 🔗 Liens")
                         if product.item_url:
-                            st.markdown(f"[➡️ Voir le produit sur AliExpress]({product.item_url})")
+                            st.markdown(f"[➡️ Voir sur AliExpress]({product.item_url})")
+                            st.code(product.item_url, language=None)
+
+                        st.markdown(f"**🖼️ Images disponibles:** {len(product.product_image_paths)}")
+
+                    if product.description and product.description != product.title:
+                        st.markdown("### 📝 Description")
+                        st.markdown(product.description)
 
         else:
             st.info("ℹ️ Aucun résultat disponible. Uploadez une image et lancez la recherche.")
 
     # Tab 3: Export
     with tab3:
-        st.header("📁 Fichiers de Résultats")
+        st.header("📊 Sélection et Export Excel")
 
-        output_path = Path(st.session_state.output_dir)
+        if st.session_state.search_results and st.session_state.search_results[1]:
+            image_metadata_list, product_data_list = st.session_state.search_results
 
-        # Vérifier si les fichiers existent
-        image_metadata_path = output_path / "image_metadata.json"
-        product_data_path = output_path / "product_data.json"
+            # Charger le mapping URL → local path
+            output_path = Path(st.session_state.output_dir)
+            image_metadata_path = output_path / "image_metadata.json"
+            url_to_local_path = {}
 
-        if image_metadata_path.exists() and product_data_path.exists():
-            col1, col2 = st.columns(2)
+            if image_metadata_path.exists():
+                with open(image_metadata_path, 'r', encoding='utf-8') as f:
+                    image_metadata = json.load(f)
+                    for img_meta in image_metadata:
+                        url = img_meta.get('src', '')
+                        local_path = img_meta.get('local_path', '')
+                        if url and local_path:
+                            url_to_local_path[url] = local_path
 
+            # Calculer les similarités
+            similarity_scores = calculate_similarity_scores(
+                st.session_state.uploaded_image_path,
+                product_data_list,
+                st.session_state.output_dir
+            )
+
+            # Trier par similarité
+            sorted_products = []
+            for product in product_data_list:
+                max_score = 0
+                for img_path in product.product_image_paths:
+                    score = similarity_scores.get(img_path, 0)
+                    max_score = max(max_score, score)
+                sorted_products.append((product, max_score))
+
+            sorted_products.sort(key=lambda x: x[1], reverse=True)
+
+            st.markdown(f"### 📋 Sélectionnez les annonces à exporter ({len(sorted_products)} résultats)")
+
+            # Initialiser la sélection dans session_state
+            if 'selected_products' not in st.session_state:
+                st.session_state.selected_products = set()
+
+            # Boutons de sélection
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.subheader("📄 image_metadata.json")
-                st.write(f"**Chemin:** {image_metadata_path}")
-
-                # Afficher un aperçu
-                with open(image_metadata_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                st.write(f"**Nombre d'entrées:** {len(data)}")
-
-                if data:
-                    with st.expander("Aperçu (première entrée)"):
-                        st.json(data[0])
-
-                # Bouton de téléchargement
-                with open(image_metadata_path, 'r', encoding='utf-8') as f:
-                    st.download_button(
-                        "⬇️ Télécharger image_metadata.json",
-                        data=f.read(),
-                        file_name="image_metadata.json",
-                        mime="application/json"
-                    )
-
+                if st.button("✅ Tout sélectionner"):
+                    st.session_state.selected_products = set(range(len(sorted_products)))
+                    st.rerun()
             with col2:
-                st.subheader("📄 product_data.json")
-                st.write(f"**Chemin:** {product_data_path}")
+                if st.button("❌ Tout désélectionner"):
+                    st.session_state.selected_products = set()
+                    st.rerun()
+            with col3:
+                st.metric("Sélectionnés", len(st.session_state.selected_products))
 
-                # Afficher un aperçu
-                with open(product_data_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                st.write(f"**Nombre d'entrées:** {len(data)}")
-
-                if data:
-                    with st.expander("Aperçu (première entrée)"):
-                        st.json(data[0])
-
-                # Bouton de téléchargement
-                with open(product_data_path, 'r', encoding='utf-8') as f:
-                    st.download_button(
-                        "⬇️ Télécharger product_data.json",
-                        data=f.read(),
-                        file_name="product_data.json",
-                        mime="application/json"
-                    )
-
-            # Section pour les images
             st.markdown("---")
-            st.subheader("🖼️ Images téléchargées")
 
-            images_dir = output_path / "images"
-            if images_dir.exists():
-                image_files = list(images_dir.glob("*"))
-                image_files = [f for f in image_files if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']]
+            # Afficher chaque produit avec checkbox
+            for idx, (product, similarity_score) in enumerate(sorted_products):
+                # Récupérer la première image
+                first_image = None
+                if product.product_image_paths:
+                    first_img_url = product.product_image_paths[0]
+                    first_image = url_to_local_path.get(first_img_url, first_img_url)
 
-                st.write(f"**Nombre d'images:** {len(image_files)}")
-                st.write(f"**Répertoire:** {images_dir}")
+                # Créer un container pour chaque produit
+                with st.container():
+                    col_check, col_img, col_info = st.columns([0.5, 1, 3])
 
-                if image_files:
-                    # Afficher une galerie d'images
-                    st.markdown("### Galerie d'images")
+                    with col_check:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        is_selected = st.checkbox(
+                            "Sélectionner",
+                            value=idx in st.session_state.selected_products,
+                            key=f"product_{idx}",
+                            label_visibility="collapsed"
+                        )
 
-                    # Pagination
-                    images_per_page = 12
-                    total_pages = (len(image_files) + images_per_page - 1) // images_per_page
+                        # Mettre à jour la sélection
+                        if is_selected:
+                            st.session_state.selected_products.add(idx)
+                        else:
+                            st.session_state.selected_products.discard(idx)
 
-                    page = st.number_input(
-                        "Page",
-                        min_value=1,
-                        max_value=total_pages,
-                        value=1
-                    )
+                    with col_img:
+                        if first_image and os.path.exists(first_image):
+                            st.image(first_image, use_container_width=True)
+                        else:
+                            st.image("https://via.placeholder.com/150", use_container_width=True)
 
-                    start_idx = (page - 1) * images_per_page
-                    end_idx = min(start_idx + images_per_page, len(image_files))
+                    with col_info:
+                        st.markdown(f"**#{idx + 1}** | **CLIP:** {similarity_score:.1%}")
+                        st.markdown(f"**🏷️** {product.title[:100]}")
+                        st.markdown(f"**💰** {product.price}")
+                        if product.item_url:
+                            st.markdown(f"[🔗 Lien AliExpress]({product.item_url})")
 
-                    cols = st.columns(4)
-                    for idx, image_file in enumerate(image_files[start_idx:end_idx]):
-                        with cols[idx % 4]:
-                            st.image(str(image_file), use_container_width=True)
-                            st.caption(image_file.name)
+                    st.markdown("---")
+
+            # Section d'export
+            if st.session_state.selected_products:
+                st.markdown("---")
+                st.markdown("### 📥 Export Excel")
+
+                # Champ keyword
+                keyword = st.text_input(
+                    "🔍 Mot-clé de recherche",
+                    value="",
+                    placeholder="Ex: sac chanel, montre luxe, etc.",
+                    help="Le mot-clé utilisé pour la recherche (sera inclus dans l'Excel)"
+                )
+
+                # Champ catégorie
+                category = st.text_input(
+                    "🏷️ Catégorie produit",
+                    value="",
+                    placeholder="Ex: bags, watches, jewelry, clothing",
+                    help="La catégorie du produit recherché"
+                )
+
+                if st.button("📊 Générer fichier Excel", type="primary", use_container_width=True):
+                    try:
+                        import pandas as pd
+                        from io import BytesIO
+
+                        # Préparer les données pour Excel
+                        excel_data = []
+                        for idx in sorted(st.session_state.selected_products):
+                            product, similarity_score = sorted_products[idx]
+
+                            excel_data.append({
+                                'Date de détection': product.collection_date.strftime('%Y-%m-%d %H:%M:%S'),
+                                'URL': product.item_url,
+                                'Product Category': category if category else 'N/A',
+                                'Product Name': product.title,
+                                'Keyword': keyword if keyword else 'N/A',
+                                'Marketplace': 'AliExpress',
+                                'Prix': product.price,
+                                'CLIP Score': f"{similarity_score:.2%}",
+                            })
+
+                        # Créer DataFrame
+                        df = pd.DataFrame(excel_data)
+
+                        # Créer le fichier Excel en mémoire
+                        excel_buffer = BytesIO()
+                        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                            df.to_excel(writer, index=False, sheet_name='Produits')
+
+                            # Ajuster la largeur des colonnes
+                            worksheet = writer.sheets['Produits']
+                            for idx, col in enumerate(df.columns):
+                                max_length = max(
+                                    df[col].astype(str).map(len).max(),
+                                    len(col)
+                                ) + 2
+                                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+
+                        excel_buffer.seek(0)
+
+                        # Bouton de téléchargement
+                        st.download_button(
+                            label="⬇️ Télécharger le fichier Excel",
+                            data=excel_buffer,
+                            file_name=f"aliexpress_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+
+                        st.success(f"✅ Fichier Excel généré avec {len(excel_data)} produits!")
+
+                        # Aperçu
+                        with st.expander("👁️ Aperçu des données"):
+                            st.dataframe(df, use_container_width=True)
+
+                    except ImportError:
+                        st.error("❌ Pandas ou openpyxl n'est pas installé. Installez avec: pip install pandas openpyxl")
+                    except Exception as e:
+                        st.error(f"❌ Erreur lors de la génération du fichier Excel: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+            else:
+                st.info("ℹ️ Sélectionnez au moins un produit pour activer l'export Excel")
 
         else:
             st.info("ℹ️ Aucun résultat disponible. Uploadez une image et lancez la recherche.")
