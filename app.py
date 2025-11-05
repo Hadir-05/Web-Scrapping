@@ -676,11 +676,17 @@ def main():
 
             # Afficher chaque produit avec checkbox (sans form pour que les boutons fonctionnent)
             for idx, (product, similarity_score) in enumerate(sorted_products):
-                # Récupérer la première image
+                # Récupérer la première image (locale ou URL)
                 first_image = None
                 if product.product_image_paths:
                     first_img_url = product.product_image_paths[0]
-                    first_image = url_to_local_path.get(first_img_url, first_img_url)
+                    local_path = url_to_local_path.get(first_img_url, first_img_url)
+
+                    # Utiliser image locale si elle existe, sinon URL en ligne
+                    if os.path.exists(str(local_path)):
+                        first_image = local_path
+                    elif first_img_url:
+                        first_image = first_img_url  # Fallback: URL en ligne
 
                 # Créer un container pour chaque produit
                 with st.container():
@@ -702,10 +708,19 @@ def main():
                             st.session_state.selected_products.discard(idx)
 
                     with col_img:
-                        if first_image and os.path.exists(first_image):
-                            st.image(first_image, use_container_width=True)
+                        # Afficher l'image (locale ou en ligne)
+                        if first_image:
+                            try:
+                                st.image(first_image, use_container_width=True)
+                                # Indicateur si c'est une image en ligne
+                                if not os.path.exists(str(first_image)):
+                                    st.caption("🌐")
+                            except Exception as e:
+                                st.markdown("🖼️")
+                                st.caption("Erreur")
                         else:
-                            st.image("https://via.placeholder.com/150", use_container_width=True)
+                            st.markdown("🖼️")
+                            st.caption("Pas d'image")
 
                     with col_info:
                         st.markdown(f"**#{idx + 1}** | **CLIP:** {similarity_score:.1%}")
