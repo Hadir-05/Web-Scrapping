@@ -57,6 +57,8 @@ class AliExpressImageSearchScraper:
         # Dataset name: only a-z, 0-9, and hyphen (not at start/end)
         self.attempt_id = f"aliexpress-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self.image_counter = 0
+        self.product_counter = 0  # Pour numéroter les dossiers produits
+        self.product_image_counters = {}  # Compteur d'images par produit {product_num: count}
         self.target_results = 0
 
     async def search_by_image(
@@ -276,29 +278,50 @@ class AliExpressImageSearchScraper:
 
             await asyncio.sleep(1 + (rnd.random() * TEMPO_DELAY))
 
+            # Incrémenter le compteur de produit
+            self.product_counter += 1
+            current_product_num = self.product_counter
+
             # Extraire les données
             try:
                 # Titre
                 title = await page.title()
                 context.log.info(f"   📝 Titre: {title[:50]}...")
 
-                # Prix
+                # Prix - Plusieurs sélecteurs pour améliorer la détection
                 price = "N/A"
-                try:
-                    price_elem = await page.locator("span[class^=price], div[class*=price]").first.text_content(timeout=3000)
-                    if price_elem:
-                        price = price_elem.strip()
-                except:
-                    pass
+                price_selectors = [
+                    "span[class*='price--']",
+                    "span[class*='Price']",
+                    "div[class*='price'] span",
+                    "span[class*='uniform-banner']",
+                    "span[data-spm-anchor-id*='price']",
+                    "div[class*='Product_Price']",
+                    "span.product-price-value",
+                    ".price-current",
+                ]
+
+                for selector in price_selectors:
+                    try:
+                        price_elem = await page.locator(selector).first.text_content(timeout=2000)
+                        if price_elem and price_elem.strip():
+                            price = price_elem.strip()
+                            context.log.info(f"   💰 Prix trouvé avec {selector}: {price}")
+                            break
+                    except:
+                        continue
+
+                if price == "N/A":
+                    context.log.warning("   ⚠️ Prix non trouvé")
 
                 # Images produit
                 context.log.info("   🖼️ Extraction des images...")
                 product_imgs = await page.locator(
-                    "div[class*=slider] img, div[class*=image-view] img"
+                    "div[class*=slider] img, div[class*=image-view] img, img[class*='magnifier']"
                 ).all()
 
                 img_links = []
-                for pimg in product_imgs[:5]:  # Max 5 images
+                for pimg in product_imgs[:3]:  # Max 3 images par produit
                     try:
                         src = await pimg.get_attribute("src")
                         if src and 'alicdn' in src:
@@ -308,13 +331,16 @@ class AliExpressImageSearchScraper:
 
                 context.log.info(f"   ✅ {len(img_links)} images trouvées")
 
-                # Ajouter les requêtes d'images (PRIORITÉ)
+                # Ajouter les requêtes d'images (PRIORITÉ) avec le numéro de produit
                 for img_url in img_links:
                     await request_queue.add_requests([
                         Request.from_url(
                             url=img_url,
                             label="ITEM_IMG",
-                            user_data={"product_url": item_url}
+                            user_data={
+                                "product_url": item_url,
+                                "product_num": current_product_num  # Passer le numéro de produit
+                            }
                         )
                     ], forefront=True)  # Priorité aux images
 
@@ -343,22 +369,32 @@ class AliExpressImageSearchScraper:
         # ========================
         @crawler.router.handler("ITEM_IMG")
         async def item_img_handler(context: PlaywrightCrawlingContext) -> None:
-            """Télécharge une image de produit"""
+            """Télécharge une image de produit dans son sous-dossier"""
             img_url = context.response.url
             product_url = context.request.user_data.get("product_url", "")
+            product_num = context.request.user_data.get("product_num", 0)
 
             try:
-                # Télécharger l'image
-                self.image_counter += 1
-                ext = '.jpg'
+                # Créer le sous-dossier du produit
+                product_dir = self.images_dir / f"product_{product_num:03d}"
+                product_dir.mkdir(parents=True, exist_ok=True)
 
+                # Incrémenter le compteur d'images pour ce produit
+                if product_num not in self.product_image_counters:
+                    self.product_image_counters[product_num] = 0
+                self.product_image_counters[product_num] += 1
+                img_num = self.product_image_counters[product_num]
+
+                # Déterminer l'extension
+                ext = '.jpg'
                 parsed = urlparse(img_url)
                 file_ext = os.path.splitext(parsed.path)[1]
                 if file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
                     ext = file_ext
 
-                filename = f"image_{self.image_counter:04d}{ext}"
-                filepath = self.images_dir / filename
+                # Nom de fichier: image_1.jpg, image_2.jpg, image_3.jpg
+                filename = f"image_{img_num}{ext}"
+                filepath = product_dir / filename
 
                 # Download
                 response = await context.page.request.get(img_url, timeout=10000)
@@ -366,7 +402,7 @@ class AliExpressImageSearchScraper:
                     with open(filepath, 'wb') as f:
                         f.write(await response.body())
 
-                    context.log.info(f"   📥 Image téléchargée: {filename}")
+                    context.log.info(f"   📥 Image téléchargée: product_{product_num:03d}/{filename}")
 
                     # Sauvegarder les métadonnées avec le chemin local
                     img_metadata = {
