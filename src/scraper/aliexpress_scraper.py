@@ -288,71 +288,222 @@ class AliExpressImageSearchScraper:
                 title = await page.title()
                 context.log.info(f"   📝 Titre: {title[:50]}...")
 
-                # Prix - Plusieurs sélecteurs pour améliorer la détection
+                # Prix - Stratégie ultra-robuste
                 # Attendre que la page charge complètement
-                await page.wait_for_load_state('networkidle', timeout=10000)
-                await asyncio.sleep(1)
+                await page.wait_for_load_state('domcontentloaded', timeout=15000)
+                await asyncio.sleep(2)
 
+                context.log.info("   💰 Recherche du prix avec stratégie ultra-robuste...")
                 price = "N/A"
-                price_selectors = [
-                    # Sélecteur exact fourni par l'utilisateur
-                    "span.price-default--current--F8OlYIo",
-                    "span[class*='price-default--current']",
-                    "span[class*='price--current']",
-                    "span[class*='price-default']",
-                    # Autres variantes
-                    "span[class*='price--']",
-                    "span[class*='Price']",
-                    "div[class*='price'] span",
-                    "span[data-spm-anchor-id*='price']",
-                    "span.product-price-value",
-                    ".price-current",
-                    # Fallback large
-                    "span:has-text('€')",
-                    "span:has-text('$')",
-                ]
 
-                context.log.info("   💰 Recherche du prix...")
-                for idx, selector in enumerate(price_selectors):
+                # STRATÉGIE 1: Utiliser JavaScript pour chercher n'importe quel élément avec €,$,£,¥
+                context.log.info("      Stratégie 1: JavaScript search pour symboles monétaires...")
+                try:
+                    price_js = await page.evaluate("""() => {
+                        // Chercher tous les éléments contenant des symboles monétaires
+                        const symbols = ['€', '$', '£', '¥', 'USD', 'EUR'];
+                        const allElements = document.querySelectorAll('span, div, p');
+
+                        for (let el of allElements) {
+                            const text = el.textContent || '';
+                            // Vérifier si contient un symbole et un nombre
+                            if (symbols.some(s => text.includes(s)) && /\d/.test(text)) {
+                                // Vérifier que c'est probablement un prix (pas trop long)
+                                if (text.trim().length < 30 && text.trim().length > 1) {
+                                    // Priorité aux éléments avec 'price' dans la classe
+                                    const className = el.className || '';
+                                    if (className.toLowerCase().includes('price')) {
+                                        return text.trim();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback: premier élément avec symbole monétaire et nombre
+                        for (let el of allElements) {
+                            const text = el.textContent || '';
+                            if (symbols.some(s => text.includes(s)) && /\d/.test(text)) {
+                                if (text.trim().length < 30 && text.trim().length > 1) {
+                                    return text.trim();
+                                }
+                            }
+                        }
+
+                        return null;
+                    }""")
+
+                    if price_js:
+                        price = price_js
+                        context.log.info(f"   ✅ Prix trouvé avec JavaScript: {price}")
+                except Exception as e:
+                    context.log.info(f"      JavaScript search échoué: {e}")
+
+                # STRATÉGIE 2: Si JavaScript n'a pas marché, essayer les sélecteurs CSS
+                if price == "N/A":
+                    context.log.info("      Stratégie 2: Sélecteurs CSS classiques...")
+                    price_selectors = [
+                        "span[class*='price-default']",
+                        "span[class*='price--current']",
+                        "span[class*='price--']",
+                        "div[class*='price'] span",
+                        "span[class*='Price']",
+                        ".product-price",
+                        "[data-spm-anchor-id*='price']",
+                    ]
+
+                    for idx, selector in enumerate(price_selectors):
+                        try:
+                            price_elem = await page.locator(selector).first.text_content(timeout=2000)
+                            if price_elem and price_elem.strip() and len(price_elem.strip()) < 30:
+                                price = price_elem.strip()
+                                context.log.info(f"   ✅ Prix trouvé avec CSS #{idx+1} ({selector}): {price}")
+                                break
+                        except:
+                            continue
+
+                # STRATÉGIE 3: Regex sur tout le contenu visible de la page
+                if price == "N/A":
+                    context.log.info("      Stratégie 3: Regex sur contenu de page...")
                     try:
-                        context.log.info(f"      Essai sélecteur #{idx+1}: {selector}")
-                        price_elem = await page.locator(selector).first.text_content(timeout=3000)
-                        if price_elem and price_elem.strip():
-                            price = price_elem.strip()
-                            context.log.info(f"   ✅ Prix trouvé avec sélecteur #{idx+1} ({selector}): {price}")
-                            break
-                        else:
-                            context.log.info(f"      Sélecteur trouvé mais vide")
+                        body_text = await page.locator('body').text_content(timeout=3000)
+                        import re
+                        # Pattern pour prix: nombre + symbole ou symbole + nombre
+                        patterns = [
+                            r'([0-9]+[,\.][0-9]{2}\s*€)',
+                            r'(€\s*[0-9]+[,\.][0-9]{2})',
+                            r'([0-9]+[,\.][0-9]{2}\s*\$)',
+                            r'(\$\s*[0-9]+[,\.][0-9]{2})',
+                        ]
+                        for pattern in patterns:
+                            matches = re.findall(pattern, body_text)
+                            if matches:
+                                price = matches[0]
+                                context.log.info(f"   ✅ Prix trouvé avec regex: {price}")
+                                break
                     except Exception as e:
-                        context.log.info(f"      Sélecteur échoué: {str(e)[:50]}")
-                        continue
+                        context.log.info(f"      Regex search échoué: {e}")
 
                 if price == "N/A":
-                    context.log.warning("   ⚠️ Prix non trouvé avec aucun sélecteur")
+                    context.log.warning("   ⚠️ Prix non trouvé avec toutes les stratégies")
 
-                # Images produit
-                context.log.info("   🖼️ Extraction des images...")
-                product_imgs = await page.locator(
-                    "div[class*=slider] img, div[class*=image-view] img, img[class*='magnifier']"
-                ).all()
-
-                context.log.info(f"      Nombre d'éléments img trouvés: {len(product_imgs)}")
-
+                # Images produit - Stratégie ultra-robuste
+                context.log.info("   🖼️ Extraction des images avec stratégie ultra-robuste...")
                 img_links = []
-                for idx, pimg in enumerate(product_imgs[:3]):  # Max 3 images par produit
-                    try:
-                        src = await pimg.get_attribute("src")
-                        context.log.info(f"      Image #{idx+1}: {src[:80] if src else 'None'}...")
-                        if src and 'alicdn' in src:
-                            img_links.append(src)
-                            context.log.info(f"         ✅ Ajoutée à la liste")
-                        else:
-                            context.log.info(f"         ⚠️ Ignorée (pas alicdn ou None)")
-                    except Exception as e:
-                        context.log.info(f"      ⚠️ Erreur lecture src: {e}")
-                        continue
 
-                context.log.info(f"   ✅ {len(img_links)} images valides trouvées")
+                # STRATÉGIE 1: JavaScript pour trouver TOUTES les images AliExpress
+                context.log.info("      Stratégie 1: JavaScript search pour images alicdn...")
+                try:
+                    imgs_js = await page.evaluate("""() => {
+                        const images = new Set();
+
+                        // Chercher dans tous les attributs possibles
+                        const allImages = document.querySelectorAll('img');
+
+                        for (let img of allImages) {
+                            // Vérifier src
+                            const src = img.src || img.getAttribute('src');
+                            if (src && src.includes('alicdn')) {
+                                // Prendre la version haute qualité si possible
+                                const highQuality = src.replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
+                                images.add(highQuality);
+                            }
+
+                            // Vérifier data-src (lazy loading)
+                            const dataSrc = img.getAttribute('data-src');
+                            if (dataSrc && dataSrc.includes('alicdn')) {
+                                const highQuality = dataSrc.replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
+                                images.add(highQuality);
+                            }
+
+                            // Vérifier srcset
+                            const srcset = img.getAttribute('srcset');
+                            if (srcset && srcset.includes('alicdn')) {
+                                // Prendre la première URL du srcset
+                                const match = srcset.match(/(https?:\/\/[^\s]+)/);
+                                if (match) {
+                                    const highQuality = match[1].replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
+                                    images.add(highQuality);
+                                }
+                            }
+                        }
+
+                        return Array.from(images);
+                    }""")
+
+                    if imgs_js and len(imgs_js) > 0:
+                        img_links = imgs_js[:3]  # Max 3 images
+                        context.log.info(f"   ✅ {len(img_links)} images trouvées avec JavaScript")
+                        for idx, url in enumerate(img_links):
+                            context.log.info(f"      Image {idx+1}: {url[:80]}...")
+                except Exception as e:
+                    context.log.info(f"      JavaScript search échoué: {e}")
+
+                # STRATÉGIE 2: Si JavaScript n'a pas marché, essayer sélecteurs Playwright
+                if len(img_links) == 0:
+                    context.log.info("      Stratégie 2: Sélecteurs Playwright...")
+                    selectors = [
+                        "img[class*='magnifier']",
+                        "div[class*='image'] img",
+                        "div[class*='slider'] img",
+                        "div[class*='gallery'] img",
+                        "div[class*='preview'] img",
+                        "img[src*='alicdn']",
+                    ]
+
+                    for selector in selectors:
+                        try:
+                            context.log.info(f"         Essai: {selector}")
+                            product_imgs = await page.locator(selector).all()
+                            context.log.info(f"         Trouvé: {len(product_imgs)} éléments")
+
+                            for idx, pimg in enumerate(product_imgs[:3]):
+                                # Essayer src
+                                src = await pimg.get_attribute("src")
+                                if not src:
+                                    # Essayer data-src
+                                    src = await pimg.get_attribute("data-src")
+
+                                if src and 'alicdn' in src:
+                                    # Améliorer la qualité de l'URL
+                                    src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('.webp', '.jpg')
+                                    if src_clean not in img_links:
+                                        img_links.append(src_clean)
+                                        context.log.info(f"         ✅ Image ajoutée: {src_clean[:60]}...")
+
+                            if len(img_links) >= 3:
+                                break
+
+                        except Exception as e:
+                            context.log.info(f"         Échoué: {e}")
+                            continue
+
+                    context.log.info(f"      {len(img_links)} images trouvées avec Playwright")
+
+                # STRATÉGIE 3: Fallback - prendre TOUTES les images alicdn de la page
+                if len(img_links) == 0:
+                    context.log.info("      Stratégie 3: Fallback - toutes les images de la page...")
+                    try:
+                        all_imgs = await page.locator("img").all()
+                        context.log.info(f"         Total images sur la page: {len(all_imgs)}")
+
+                        for img in all_imgs[:20]:  # Limiter à 20 premières
+                            src = await img.get_attribute("src")
+                            if not src:
+                                src = await img.get_attribute("data-src")
+
+                            if src and 'alicdn' in src and len(src) > 50:  # URL substantielle
+                                src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('.webp', '.jpg')
+                                if src_clean not in img_links:
+                                    img_links.append(src_clean)
+                                    context.log.info(f"         ✅ Image fallback: {src_clean[:60]}...")
+                                    if len(img_links) >= 3:
+                                        break
+
+                        context.log.info(f"      {len(img_links)} images trouvées avec fallback")
+                    except Exception as e:
+                        context.log.info(f"      Fallback échoué: {e}")
+
+                context.log.info(f"   ✅ TOTAL: {len(img_links)} images valides à télécharger")
 
                 # Ajouter les requêtes d'images (PRIORITÉ) avec le numéro de produit
                 if len(img_links) > 0:
