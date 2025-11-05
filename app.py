@@ -29,6 +29,36 @@ st.set_page_config(
 )
 
 
+def get_next_output_dir():
+    """Générer le prochain nom de dossier unique pour la recherche"""
+    base_dir = Path(".")
+
+    # Chercher tous les dossiers output_recherche*
+    existing_dirs = list(base_dir.glob("output_recherche*"))
+
+    if not existing_dirs:
+        return "output_recherche1"
+
+    # Extraire les numéros
+    numbers = []
+    for dir_path in existing_dirs:
+        name = dir_path.name
+        # Extraire le numéro après "output_recherche"
+        try:
+            num = int(name.replace("output_recherche", ""))
+            numbers.append(num)
+        except ValueError:
+            continue
+
+    # Prochain numéro
+    if numbers:
+        next_num = max(numbers) + 1
+    else:
+        next_num = 1
+
+    return f"output_recherche{next_num}"
+
+
 def init_session_state():
     """Initialiser les variables de session"""
     if 'image_search' not in st.session_state:
@@ -38,7 +68,9 @@ def init_session_state():
     if 'uploaded_image_path' not in st.session_state:
         st.session_state.uploaded_image_path = None
     if 'output_dir' not in st.session_state:
-        st.session_state.output_dir = "output"
+        st.session_state.output_dir = None  # Sera généré à la recherche
+    if 'current_search_dir' not in st.session_state:
+        st.session_state.current_search_dir = None  # Dossier de la recherche en cours
     # Cache pour les scores de similarité CLIP (évite de recalculer)
     if 'cached_similarity_scores' not in st.session_state:
         st.session_state.cached_similarity_scores = None
@@ -241,12 +273,27 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
 
-        output_dir = st.text_input(
-            "Répertoire de sortie",
-            value="output",
-            help="Répertoire où seront sauvegardés les résultats"
-        )
-        st.session_state.output_dir = output_dir
+        # Afficher le prochain dossier qui sera créé
+        next_dir = get_next_output_dir()
+        st.info(f"📁 **Prochaine recherche:** `{next_dir}`")
+        st.caption("Un nouveau dossier sera créé automatiquement à chaque recherche")
+
+        # Liste des recherches précédentes
+        existing_searches = sorted(Path(".").glob("output_recherche*"), reverse=True)
+        if existing_searches:
+            st.markdown("### 📂 Recherches Précédentes")
+            for search_dir in existing_searches[:5]:  # Afficher les 5 dernières
+                # Compter les produits
+                product_file = search_dir / "product_data.json"
+                count = 0
+                if product_file.exists():
+                    try:
+                        with open(product_file, 'r', encoding='utf-8') as f:
+                            products = json.load(f)
+                            count = len(products)
+                    except:
+                        pass
+                st.caption(f"📦 {search_dir.name} ({count} produits)")
 
         max_results = st.slider(
             "Nombre max de produits",
@@ -346,35 +393,42 @@ def main():
                 )
 
                 if search_button and st.session_state.uploaded_image_path:
+                    # Générer un nouveau dossier unique pour cette recherche
+                    search_output_dir = get_next_output_dir()
+                    st.session_state.current_search_dir = search_output_dir
+
                     with st.spinner(f"🔄 Recherche par image en cours sur AliExpress... Cela peut prendre quelques minutes."):
+                        st.info(f"📁 Résultats seront sauvegardés dans: `{search_output_dir}`")
                         try:
                             # Exécuter la recherche
                             image_metadata_list, product_data_list = run_aliexpress_search_sync(
                                 st.session_state.uploaded_image_path,
                                 category,
                                 max_results,
-                                output_dir
+                                search_output_dir  # Utiliser le dossier unique
                             )
 
                             st.session_state.search_results = (image_metadata_list, product_data_list)
+                            st.session_state.output_dir = search_output_dir  # Sauvegarder pour les autres tabs
 
                             if product_data_list:
                                 # Sauvegarder les résultats
                                 img_path, prod_path = save_results(
                                     image_metadata_list,
                                     product_data_list,
-                                    output_dir
+                                    search_output_dir  # Utiliser le dossier unique
                                 )
 
                                 st.success(f"✅ Recherche terminée avec succès!")
                                 st.info(f"📊 {len(product_data_list)} produits trouvés")
+                                st.success(f"📁 Résultats sauvegardés dans: `{search_output_dir}`")
 
                                 # Calculer les scores de similarité avec CLIP (avec cache)
                                 with st.spinner("🧠 Calcul des similarités avec CLIP (ViT-L-14)..."):
                                     similarity_scores, url_to_local_path = get_similarity_scores_cached(
                                         st.session_state.uploaded_image_path,
                                         product_data_list,
-                                        output_dir
+                                        search_output_dir  # Utiliser le dossier unique
                                     )
 
                                 # Trier les produits par similarité
@@ -404,11 +458,14 @@ def main():
 
             image_metadata_list, product_data_list = st.session_state.search_results
 
+            # Récupérer le dossier de sortie (avec fallback)
+            current_output_dir = st.session_state.output_dir if st.session_state.output_dir else "output"
+
             # Calculer et trier par similarité (avec cache)
             similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
-                st.session_state.output_dir
+                current_output_dir
             )
 
             sorted_products = []
@@ -446,11 +503,14 @@ def main():
         if st.session_state.search_results and st.session_state.search_results[1]:
             image_metadata_list, product_data_list = st.session_state.search_results
 
+            # Récupérer le dossier de sortie (avec fallback)
+            current_output_dir = st.session_state.output_dir if st.session_state.output_dir else "output"
+
             # Calculer les similarités (avec cache)
             similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
-                st.session_state.output_dir
+                current_output_dir
             )
 
             sorted_products = []
@@ -572,11 +632,14 @@ def main():
         if st.session_state.search_results and st.session_state.search_results[1]:
             image_metadata_list, product_data_list = st.session_state.search_results
 
+            # Récupérer le dossier de sortie (avec fallback)
+            current_output_dir = st.session_state.output_dir if st.session_state.output_dir else "output"
+
             # Calculer les similarités (avec cache - important pour éviter les lenteurs!)
             similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
-                st.session_state.output_dir
+                current_output_dir
             )
 
             # Trier par similarité
