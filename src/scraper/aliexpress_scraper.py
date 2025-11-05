@@ -109,7 +109,7 @@ class AliExpressImageSearchScraper:
         # Crawler avec configuration avancée
         crawler = PlaywrightCrawler(
             request_manager=request_queue,
-            max_requests_per_crawl=max_results * 2,  # Items + images
+            max_requests_per_crawl=max_results * 20,  # Items + ALL images (large buffer)
             configuration=custom_config,
             headless=headless,
             browser_type="chromium",
