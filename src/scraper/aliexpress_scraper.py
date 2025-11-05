@@ -386,124 +386,101 @@ class AliExpressImageSearchScraper:
                 if price == "N/A":
                     context.log.warning("   ⚠️ Prix non trouvé avec toutes les stratégies")
 
-                # Images produit - Stratégie ultra-robuste
-                context.log.info("   🖼️ Extraction des images avec stratégie ultra-robuste...")
+                # Images produit - Stratégies multiples inspirées du code professionnel
+                context.log.info("   🖼️ Extraction des images...")
                 img_links = []
 
-                # STRATÉGIE 1: JavaScript pour trouver TOUTES les images AliExpress
-                context.log.info("      Stratégie 1: JavaScript search pour images alicdn...")
+                # STRATÉGIE 1: Sélecteur exact du code professionnel
+                context.log.info("      Stratégie 1: Sélecteur slider exact (div[class^=slider--img] > img)...")
                 try:
-                    imgs_js = await page.evaluate("""() => {
-                        const images = new Set();
+                    product_imgs = await page.locator("div[class^=slider--img] > img").all()
+                    context.log.info(f"         Trouvé: {len(product_imgs)} images avec sélecteur slider")
 
-                        // Chercher dans tous les attributs possibles
-                        const allImages = document.querySelectorAll('img');
+                    for pimg in product_imgs[:3]:  # Max 3 images
+                        src = await pimg.get_attribute("src")
+                        if src and 'alicdn' in src:
+                            img_links.append(src)
+                            context.log.info(f"         ✅ {src[:70]}...")
 
-                        for (let img of allImages) {
-                            // Vérifier src
-                            const src = img.src || img.getAttribute('src');
-                            if (src && src.includes('alicdn')) {
-                                // Prendre la version haute qualité si possible
-                                const highQuality = src.replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
-                                images.add(highQuality);
-                            }
-
-                            // Vérifier data-src (lazy loading)
-                            const dataSrc = img.getAttribute('data-src');
-                            if (dataSrc && dataSrc.includes('alicdn')) {
-                                const highQuality = dataSrc.replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
-                                images.add(highQuality);
-                            }
-
-                            // Vérifier srcset
-                            const srcset = img.getAttribute('srcset');
-                            if (srcset && srcset.includes('alicdn')) {
-                                // Prendre la première URL du srcset
-                                const match = srcset.match(/(https?:\/\/[^\s]+)/);
-                                if (match) {
-                                    const highQuality = match[1].replace(/_\d+x\d+/, '').replace('.webp', '.jpg');
-                                    images.add(highQuality);
-                                }
-                            }
-                        }
-
-                        return Array.from(images);
-                    }""")
-
-                    if imgs_js and len(imgs_js) > 0:
-                        img_links = imgs_js[:3]  # Max 3 images
-                        context.log.info(f"   ✅ {len(img_links)} images trouvées avec JavaScript")
-                        for idx, url in enumerate(img_links):
-                            context.log.info(f"      Image {idx+1}: {url[:80]}...")
+                    if len(img_links) > 0:
+                        context.log.info(f"      ✅ {len(img_links)} images extraites avec sélecteur slider")
                 except Exception as e:
-                    context.log.info(f"      JavaScript search échoué: {e}")
+                    context.log.info(f"      Sélecteur slider échoué: {e}")
 
-                # STRATÉGIE 2: Si JavaScript n'a pas marché, essayer sélecteurs Playwright
+                # STRATÉGIE 2: Variantes du sélecteur slider
                 if len(img_links) == 0:
-                    context.log.info("      Stratégie 2: Sélecteurs Playwright...")
-                    selectors = [
-                        "img[class*='magnifier']",
-                        "div[class*='image'] img",
+                    context.log.info("      Stratégie 2: Variantes sélecteurs slider...")
+                    slider_selectors = [
                         "div[class*='slider'] img",
+                        "div[class*='image-view'] img",
+                        "img[class*='magnifier']",
                         "div[class*='gallery'] img",
-                        "div[class*='preview'] img",
-                        "img[src*='alicdn']",
                     ]
 
-                    for selector in selectors:
+                    for selector in slider_selectors:
                         try:
                             context.log.info(f"         Essai: {selector}")
-                            product_imgs = await page.locator(selector).all()
-                            context.log.info(f"         Trouvé: {len(product_imgs)} éléments")
+                            imgs = await page.locator(selector).all()
+                            context.log.info(f"         Trouvé: {len(imgs)} éléments")
 
-                            for idx, pimg in enumerate(product_imgs[:3]):
-                                # Essayer src
+                            for pimg in imgs[:3]:
                                 src = await pimg.get_attribute("src")
                                 if not src:
-                                    # Essayer data-src
                                     src = await pimg.get_attribute("data-src")
 
-                                if src and 'alicdn' in src:
-                                    # Améliorer la qualité de l'URL
-                                    src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('.webp', '.jpg')
-                                    if src_clean not in img_links:
-                                        img_links.append(src_clean)
-                                        context.log.info(f"         ✅ Image ajoutée: {src_clean[:60]}...")
+                                if src and 'alicdn' in src and src not in img_links:
+                                    img_links.append(src)
+                                    context.log.info(f"         ✅ {src[:70]}...")
 
                             if len(img_links) >= 3:
                                 break
-
                         except Exception as e:
                             context.log.info(f"         Échoué: {e}")
-                            continue
 
-                    context.log.info(f"      {len(img_links)} images trouvées avec Playwright")
-
-                # STRATÉGIE 3: Fallback - prendre TOUTES les images alicdn de la page
+                # STRATÉGIE 3: JavaScript comprehensive search
                 if len(img_links) == 0:
-                    context.log.info("      Stratégie 3: Fallback - toutes les images de la page...")
+                    context.log.info("      Stratégie 3: JavaScript comprehensive search...")
                     try:
-                        all_imgs = await page.locator("img").all()
-                        context.log.info(f"         Total images sur la page: {len(all_imgs)}")
+                        imgs_js = await page.evaluate("""() => {
+                            const images = [];
+                            const seen = new Set();
 
-                        for img in all_imgs[:20]:  # Limiter à 20 premières
-                            src = await img.get_attribute("src")
-                            if not src:
-                                src = await img.get_attribute("data-src")
+                            // Priorité: chercher dans les divs slider
+                            const sliderImgs = document.querySelectorAll('div[class*="slider"] img, div[class*="image"] img');
+                            for (let img of sliderImgs) {
+                                const src = img.src || img.getAttribute('src') || img.getAttribute('data-src');
+                                if (src && src.includes('alicdn') && !seen.has(src)) {
+                                    images.push(src);
+                                    seen.add(src);
+                                    if (images.length >= 3) return images;
+                                }
+                            }
 
-                            if src and 'alicdn' in src and len(src) > 50:  # URL substantielle
-                                src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('.webp', '.jpg')
-                                if src_clean not in img_links:
-                                    img_links.append(src_clean)
-                                    context.log.info(f"         ✅ Image fallback: {src_clean[:60]}...")
-                                    if len(img_links) >= 3:
-                                        break
+                            // Fallback: toutes les images alicdn
+                            if (images.length === 0) {
+                                const allImgs = document.querySelectorAll('img');
+                                for (let img of allImgs) {
+                                    const src = img.src || img.getAttribute('src') || img.getAttribute('data-src');
+                                    if (src && src.includes('alicdn') && !seen.has(src)) {
+                                        images.push(src);
+                                        seen.add(src);
+                                        if (images.length >= 3) break;
+                                    }
+                                }
+                            }
 
-                        context.log.info(f"      {len(img_links)} images trouvées avec fallback")
+                            return images;
+                        }""")
+
+                        if imgs_js and len(imgs_js) > 0:
+                            img_links = imgs_js[:3]
+                            context.log.info(f"      ✅ {len(img_links)} images trouvées avec JavaScript")
+                            for idx, url in enumerate(img_links):
+                                context.log.info(f"         {idx+1}. {url[:70]}...")
                     except Exception as e:
-                        context.log.info(f"      Fallback échoué: {e}")
+                        context.log.info(f"      JavaScript échoué: {e}")
 
-                context.log.info(f"   ✅ TOTAL: {len(img_links)} images valides à télécharger")
+                context.log.info(f"   📊 TOTAL: {len(img_links)} images à télécharger")
 
                 # Ajouter les requêtes d'images (PRIORITÉ) avec le numéro de produit
                 if len(img_links) > 0:
@@ -550,29 +527,26 @@ class AliExpressImageSearchScraper:
         # ========================
         @crawler.router.handler("ITEM_IMG")
         async def item_img_handler(context: PlaywrightCrawlingContext) -> None:
-            """Télécharge une image de produit dans son sous-dossier"""
+            """
+            Télécharge une image de produit dans son sous-dossier.
+            Inspiré du code professionnel: utilise response.body() pour plus de fiabilité.
+            """
             img_url = context.response.url
             product_url = context.request.user_data.get("product_url", "")
             product_num = context.request.user_data.get("product_num", 0)
 
-            context.log.info(f"   📥 DEBUT téléchargement image")
-            context.log.info(f"      URL: {img_url}")
-            context.log.info(f"      Product num: {product_num}")
-            context.log.info(f"      Product URL: {product_url}")
+            context.log.info(f"   📥 Téléchargement image produit #{product_num}")
 
             try:
                 # Créer le sous-dossier du produit
                 product_dir = self.images_dir / f"product_{product_num:03d}"
-                context.log.info(f"      Création dossier: {product_dir}")
                 product_dir.mkdir(parents=True, exist_ok=True)
-                context.log.info(f"      ✅ Dossier créé/existe: {product_dir}")
 
                 # Incrémenter le compteur d'images pour ce produit
                 if product_num not in self.product_image_counters:
                     self.product_image_counters[product_num] = 0
                 self.product_image_counters[product_num] += 1
                 img_num = self.product_image_counters[product_num]
-                context.log.info(f"      Numéro d'image: {img_num}")
 
                 # Déterminer l'extension
                 ext = '.jpg'
@@ -580,47 +554,45 @@ class AliExpressImageSearchScraper:
                 file_ext = os.path.splitext(parsed.path)[1]
                 if file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
                     ext = file_ext
-                context.log.info(f"      Extension: {ext}")
 
                 # Nom de fichier: image_1.jpg, image_2.jpg, image_3.jpg
                 filename = f"image_{img_num}{ext}"
                 filepath = product_dir / filename
-                context.log.info(f"      Chemin complet: {filepath}")
 
-                # Download
-                context.log.info(f"      Téléchargement depuis: {img_url}")
-                response = await context.page.request.get(img_url, timeout=10000)
-                context.log.info(f"      Status HTTP: {response.status}")
+                # Télécharger l'image via response.body() (méthode du code professionnel)
+                if not filepath.exists():
+                    data = await context.response.body()
 
-                if response.status == 200:
-                    body = await response.body()
-                    context.log.info(f"      Taille: {len(body)} bytes")
+                    if data and len(data) > 0:
+                        # Écriture atomique avec flush et fsync pour garantir l'écriture
+                        with open(filepath, 'wb') as f:
+                            f.write(data)
+                            f.flush()
+                            os.fsync(f.fileno())
 
-                    with open(filepath, 'wb') as f:
-                        f.write(body)
+                        # Vérifier que le fichier existe et a la bonne taille
+                        if filepath.exists():
+                            actual_size = filepath.stat().st_size
+                            context.log.info(f"   ✅ Image {img_num}/3: {filename} ({actual_size} bytes)")
 
-                    # Vérifier que le fichier existe
-                    if filepath.exists():
-                        actual_size = filepath.stat().st_size
-                        context.log.info(f"   ✅ Image téléchargée: product_{product_num:03d}/{filename} ({actual_size} bytes)")
+                            # Sauvegarder les métadonnées avec le chemin local
+                            img_metadata = {
+                                "src": img_url,
+                                "link": product_url,
+                                "local_path": str(filepath),  # IMPORTANT: Chemin local pour CLIP
+                            }
+                            await img_dataset.push_data(img_metadata)
+                        else:
+                            context.log.error(f"   ❌ Fichier non créé après écriture: {filepath}")
                     else:
-                        context.log.error(f"   ❌ Fichier non créé: {filepath}")
-
-                    # Sauvegarder les métadonnées avec le chemin local
-                    img_metadata = {
-                        "src": img_url,
-                        "link": product_url,
-                        "local_path": str(filepath),  # IMPORTANT: Chemin local pour CLIP
-                    }
-                    await img_dataset.push_data(img_metadata)
-                    context.log.info(f"      ✅ Métadonnées sauvegardées")
+                        context.log.error(f"   ❌ Données vides pour: {img_url}")
                 else:
-                    context.log.error(f"   ❌ Status HTTP {response.status} pour {img_url}")
+                    context.log.info(f"   ⏭️ Image déjà existante: {filename}")
 
             except Exception as e:
-                context.log.error(f"   ❌ Erreur téléchargement image: {e}")
+                context.log.error(f"   ❌ Erreur téléchargement: {str(e)[:100]}")
                 import traceback
-                context.log.error(f"   Traceback: {traceback.format_exc()}")
+                context.log.error(f"   {traceback.format_exc()[:200]}")
 
             await context.page.close()
 
