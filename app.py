@@ -39,6 +39,11 @@ def init_session_state():
         st.session_state.uploaded_image_path = None
     if 'output_dir' not in st.session_state:
         st.session_state.output_dir = "output"
+    # Cache pour les scores de similarité CLIP (évite de recalculer)
+    if 'cached_similarity_scores' not in st.session_state:
+        st.session_state.cached_similarity_scores = None
+    if 'cached_url_to_local_path' not in st.session_state:
+        st.session_state.cached_url_to_local_path = None
 
 
 def run_aliexpress_search_sync(image_path: str, category: str, max_results: int, output_dir: str):
@@ -91,6 +96,26 @@ def save_results(image_metadata_list, product_data_list, output_dir):
     DataManager.save_product_data(product_data_list, str(product_data_path))
 
     return image_metadata_path, product_data_path
+
+
+def get_similarity_scores_cached(uploaded_image_path: str, product_data_list, output_dir: str = "output"):
+    """Récupère les scores de similarité (avec cache)"""
+    # Vérifier si on a déjà calculé les scores pour cette session
+    if st.session_state.cached_similarity_scores is not None:
+        print("📦 Utilisation du cache de similarité CLIP")
+        return st.session_state.cached_similarity_scores, st.session_state.cached_url_to_local_path
+
+    # Sinon, calculer et mettre en cache
+    print("🧠 Calcul des scores de similarité CLIP (sera mis en cache)...")
+    similarity_scores, url_to_local_path = calculate_similarity_scores(
+        uploaded_image_path, product_data_list, output_dir
+    )
+
+    # Mettre en cache
+    st.session_state.cached_similarity_scores = similarity_scores
+    st.session_state.cached_url_to_local_path = url_to_local_path
+
+    return similarity_scores, url_to_local_path
 
 
 def calculate_similarity_scores(uploaded_image_path: str, product_data_list, output_dir: str = "output"):
@@ -162,7 +187,8 @@ def calculate_similarity_scores(uploaded_image_path: str, product_data_list, out
         print(f"  Score: {score:.4f} - {original_url}")
         similarity_scores[original_url] = score
 
-    return similarity_scores
+    # Retourner aussi le mapping pour utilisation dans les tabs
+    return similarity_scores, url_to_local_path
 
 
 def main():
@@ -305,9 +331,9 @@ def main():
                                 st.success(f"✅ Recherche terminée avec succès!")
                                 st.info(f"📊 {len(product_data_list)} produits trouvés")
 
-                                # Calculer les scores de similarité avec CLIP
+                                # Calculer les scores de similarité avec CLIP (avec cache)
                                 with st.spinner("🧠 Calcul des similarités avec CLIP (ViT-L-14)..."):
-                                    similarity_scores = calculate_similarity_scores(
+                                    similarity_scores, url_to_local_path = get_similarity_scores_cached(
                                         st.session_state.uploaded_image_path,
                                         product_data_list,
                                         output_dir
@@ -340,8 +366,8 @@ def main():
 
             image_metadata_list, product_data_list = st.session_state.search_results
 
-            # Calculer et trier par similarité
-            similarity_scores = calculate_similarity_scores(
+            # Calculer et trier par similarité (avec cache)
+            similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
                 st.session_state.output_dir
@@ -361,8 +387,12 @@ def main():
             cols = st.columns(3)
             for idx, (product, similarity_score) in enumerate(sorted_products[:6]):
                 with cols[idx % 3]:
-                    if product.product_image_paths and os.path.exists(product.product_image_paths[0]):
-                        st.image(product.product_image_paths[0], use_container_width=True)
+                    # Récupérer le chemin local de la première image
+                    if product.product_image_paths:
+                        first_img_url = product.product_image_paths[0]
+                        local_path = url_to_local_path.get(first_img_url, first_img_url)
+                        if os.path.exists(local_path):
+                            st.image(local_path, use_container_width=True)
 
                     st.markdown(f"**{product.title[:60]}...**")
                     st.markdown(f"💰 **Prix:** {product.price}")
@@ -378,22 +408,8 @@ def main():
         if st.session_state.search_results and st.session_state.search_results[1]:
             image_metadata_list, product_data_list = st.session_state.search_results
 
-            # Charger le mapping URL → local path
-            output_path = Path(st.session_state.output_dir)
-            image_metadata_path = output_path / "image_metadata.json"
-            url_to_local_path = {}
-
-            if image_metadata_path.exists():
-                with open(image_metadata_path, 'r', encoding='utf-8') as f:
-                    image_metadata = json.load(f)
-                    for img_meta in image_metadata:
-                        url = img_meta.get('src', '')
-                        local_path = img_meta.get('local_path', '')
-                        if url and local_path:
-                            url_to_local_path[url] = local_path
-
-            # Calculer les similarités
-            similarity_scores = calculate_similarity_scores(
+            # Calculer les similarités (avec cache)
+            similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
                 st.session_state.output_dir
@@ -466,22 +482,8 @@ def main():
         if st.session_state.search_results and st.session_state.search_results[1]:
             image_metadata_list, product_data_list = st.session_state.search_results
 
-            # Charger le mapping URL → local path
-            output_path = Path(st.session_state.output_dir)
-            image_metadata_path = output_path / "image_metadata.json"
-            url_to_local_path = {}
-
-            if image_metadata_path.exists():
-                with open(image_metadata_path, 'r', encoding='utf-8') as f:
-                    image_metadata = json.load(f)
-                    for img_meta in image_metadata:
-                        url = img_meta.get('src', '')
-                        local_path = img_meta.get('local_path', '')
-                        if url and local_path:
-                            url_to_local_path[url] = local_path
-
-            # Calculer les similarités
-            similarity_scores = calculate_similarity_scores(
+            # Calculer les similarités (avec cache - important pour éviter les lenteurs!)
+            similarity_scores, url_to_local_path = get_similarity_scores_cached(
                 st.session_state.uploaded_image_path,
                 product_data_list,
                 st.session_state.output_dir
@@ -519,47 +521,52 @@ def main():
 
             st.markdown("---")
 
-            # Afficher chaque produit avec checkbox
-            for idx, (product, similarity_score) in enumerate(sorted_products):
-                # Récupérer la première image
-                first_image = None
-                if product.product_image_paths:
-                    first_img_url = product.product_image_paths[0]
-                    first_image = url_to_local_path.get(first_img_url, first_img_url)
+            # Utiliser un form pour éviter les reruns à chaque checkbox
+            with st.form(key="product_selection_form"):
+                # Afficher chaque produit avec checkbox
+                checkbox_states = {}
+                for idx, (product, similarity_score) in enumerate(sorted_products):
+                    # Récupérer la première image
+                    first_image = None
+                    if product.product_image_paths:
+                        first_img_url = product.product_image_paths[0]
+                        first_image = url_to_local_path.get(first_img_url, first_img_url)
 
-                # Créer un container pour chaque produit
-                with st.container():
-                    col_check, col_img, col_info = st.columns([0.5, 1, 3])
+                    # Créer un container pour chaque produit
+                    with st.container():
+                        col_check, col_img, col_info = st.columns([0.5, 1, 3])
 
-                    with col_check:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        is_selected = st.checkbox(
-                            "Sélectionner",
-                            value=idx in st.session_state.selected_products,
-                            key=f"product_{idx}",
-                            label_visibility="collapsed"
-                        )
+                        with col_check:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            checkbox_states[idx] = st.checkbox(
+                                "Sélectionner",
+                                value=idx in st.session_state.selected_products,
+                                key=f"product_{idx}",
+                                label_visibility="collapsed"
+                            )
 
-                        # Mettre à jour la sélection
-                        if is_selected:
-                            st.session_state.selected_products.add(idx)
-                        else:
-                            st.session_state.selected_products.discard(idx)
+                        with col_img:
+                            if first_image and os.path.exists(first_image):
+                                st.image(first_image, use_container_width=True)
+                            else:
+                                st.image("https://via.placeholder.com/150", use_container_width=True)
 
-                    with col_img:
-                        if first_image and os.path.exists(first_image):
-                            st.image(first_image, use_container_width=True)
-                        else:
-                            st.image("https://via.placeholder.com/150", use_container_width=True)
+                        with col_info:
+                            st.markdown(f"**#{idx + 1}** | **CLIP:** {similarity_score:.1%}")
+                            st.markdown(f"**🏷️** {product.title[:100]}")
+                            st.markdown(f"**💰** {product.price}")
+                            if product.item_url:
+                                st.markdown(f"[🔗 Lien AliExpress]({product.item_url})")
 
-                    with col_info:
-                        st.markdown(f"**#{idx + 1}** | **CLIP:** {similarity_score:.1%}")
-                        st.markdown(f"**🏷️** {product.title[:100]}")
-                        st.markdown(f"**💰** {product.price}")
-                        if product.item_url:
-                            st.markdown(f"[🔗 Lien AliExpress]({product.item_url})")
+                        st.markdown("---")
 
-                    st.markdown("---")
+                # Bouton de validation du form
+                submitted = st.form_submit_button("✅ Valider la sélection", use_container_width=True)
+
+                if submitted:
+                    # Mettre à jour les sélections
+                    st.session_state.selected_products = {idx for idx, checked in checkbox_states.items() if checked}
+                    st.rerun()
 
             # Section d'export
             if st.session_state.selected_products:
