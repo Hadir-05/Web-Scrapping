@@ -28,6 +28,12 @@ from crawlee.fingerprint_suite import (
 
 from src.models.data_models import ImageMetadata, ProductData
 
+# Extensions d'images valides
+VALID_SUFFIXES = ['.png', '.jpg', '.jpeg', '.webp', '.avif']
+
+# Délai aléatoire pour éviter détection (secondes)
+TEMPO_DELAY = 2
+
 
 # Configuration
 HEADLESS = True
@@ -386,96 +392,76 @@ class AliExpressImageSearchScraper:
                 if price == "N/A":
                     context.log.warning("   ⚠️ Prix non trouvé avec toutes les stratégies")
 
-                # Images produit - APPROCHE ULTRA-AGRESSIVE: Prendre TOUTES les grandes images
-                context.log.info("   🖼️ Extraction des images (mode agressif)...")
+                # Images produit - Sélecteur CSS CIBLÉ pour le slider de produit
+                context.log.info("   🖼️ Extraction des images du produit...")
                 img_links = []
 
-                # STRATÉGIE UNIQUE: JavaScript pour prendre TOUTES les images > 200px
-                context.log.info("      JavaScript: Récupération de TOUTES les grandes images...")
+                # STRATÉGIE 1: Sélecteur CSS spécifique pour le slider d'images produit
+                context.log.info("      Méthode 1: Sélecteur slider d'images (div[class^=slider--img] > img)...")
                 try:
-                    imgs_js = await page.evaluate("""() => {
-                        const images = [];
-                        const allImgs = document.querySelectorAll('img');
+                    product_imgs = await page.locator("div[class^=slider--img] > img").all()
+                    context.log.info(f"         Trouvé {len(product_imgs)} images dans le slider")
 
-                        console.log('Total images sur la page:', allImgs.length);
+                    for idx, img in enumerate(product_imgs[:5], 1):  # Max 5 images
+                        try:
+                            src = await img.get_attribute("src")
+                            if not src:
+                                src = await img.get_attribute("data-src")
 
-                        for (let img of allImgs) {
-                            const src = img.src || img.getAttribute('src') || img.getAttribute('data-src');
+                            if src:
+                                # Nettoyer l'URL (supprimer les suffixes de miniatures)
+                                src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
 
-                            if (src && src.includes('alicdn')) {
-                                const width = img.naturalWidth || img.width || 0;
-                                const height = img.naturalHeight || img.height || 0;
+                                # Vérifier que c'est bien une image AliExpress
+                                if 'alicdn' in src_clean:
+                                    img_links.append(src_clean)
+                                    context.log.info(f"         {idx}. {src_clean[:70]}...")
+                        except Exception as e:
+                            context.log.warning(f"         Erreur image {idx}: {e}")
 
-                                console.log('Image:', {
-                                    src: src.substring(0, 80),
-                                    width: width,
-                                    height: height
-                                });
-
-                                // Prendre si > 200px dans au moins une dimension
-                                if (width >= 200 || height >= 200) {
-                                    // Améliorer la qualité
-                                    let srcClean = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '');
-                                    srcClean = srcClean.replace('.webp', '.jpg');
-
-                                    images.push({
-                                        url: srcClean,
-                                        width: width,
-                                        height: height
-                                    });
-                                }
-                            }
-                        }
-
-                        console.log('Images sélectionnées:', images.length);
-                        return images;
-                    }""")
-
-                    context.log.info(f"         JavaScript a trouvé {len(imgs_js) if imgs_js else 0} grandes images")
-
-                    if imgs_js and len(imgs_js) > 0:
-                        # Prendre TOUTES les images (pas de limite à 3)
-                        for idx, img_info in enumerate(imgs_js, 1):
-                            url = img_info['url']
-                            width = img_info['width']
-                            height = img_info['height']
-
-                            img_links.append(url)
-                            context.log.info(f"         {idx}. {url[:70]}... ({width}x{height}px)")
-
-                        context.log.info(f"      ✅ {len(img_links)} images récupérées")
+                    if len(img_links) > 0:
+                        context.log.info(f"      ✅ {len(img_links)} images extraites du slider")
                     else:
-                        context.log.warning(f"      ⚠️ JavaScript n'a trouvé AUCUNE grande image!")
+                        context.log.warning(f"      ⚠️ Aucune image trouvée dans le slider")
 
                 except Exception as e:
-                    context.log.error(f"      ❌ JavaScript échoué: {e}")
+                    context.log.error(f"      ❌ Sélecteur slider échoué: {e}")
                     import traceback
                     context.log.error(f"      {traceback.format_exc()}")
 
-                # FALLBACK: Si JavaScript a échoué, essayer méthode classique
+                # FALLBACK: Si le slider n'a pas marché, chercher dans la galerie d'images
                 if len(img_links) == 0:
-                    context.log.info("      FALLBACK: Méthode Playwright classique...")
+                    context.log.info("      FALLBACK: Recherche dans la galerie d'images...")
                     try:
-                        all_imgs = await page.locator("img").all()
-                        context.log.info(f"         Playwright a trouvé {len(all_imgs)} images au total")
+                        # Essayer d'autres sélecteurs communs pour galeries d'images
+                        fallback_selectors = [
+                            "div[class*='image-view'] img",
+                            "div[class*='gallery'] img",
+                            "div[class*='product-image'] img",
+                            "img[class*='product']",
+                        ]
 
-                        for idx, img in enumerate(all_imgs[:20], 1):  # Limiter à 20 premières
+                        for selector in fallback_selectors:
+                            if len(img_links) >= 3:
+                                break
+
                             try:
-                                src = await img.get_attribute("src")
-                                if not src:
-                                    src = await img.get_attribute("data-src")
+                                imgs = await page.locator(selector).all()
+                                context.log.info(f"         Sélecteur '{selector}': {len(imgs)} images")
 
-                                if src and 'alicdn' in src:
-                                    context.log.info(f"         {idx}. {src[:70]}...")
-                                    img_links.append(src)
+                                for img in imgs[:3]:
+                                    src = await img.get_attribute("src") or await img.get_attribute("data-src")
+                                    if src and 'alicdn' in src and src not in img_links:
+                                        src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                                        img_links.append(src_clean)
 
-                            except Exception as e:
-                                context.log.info(f"         Erreur image {idx}: {e}")
+                            except Exception:
+                                continue
 
-                        context.log.info(f"      Playwright: {len(img_links)} images récupérées")
+                        context.log.info(f"      Fallback: {len(img_links)} images récupérées")
 
                     except Exception as e:
-                        context.log.error(f"      ❌ Fallback Playwright échoué: {e}")
+                        context.log.error(f"      ❌ Fallback échoué: {e}")
 
                 context.log.info(f"   📊 TOTAL FINAL: {len(img_links)} images à télécharger")
 
@@ -526,7 +512,7 @@ class AliExpressImageSearchScraper:
         async def item_img_handler(context: PlaywrightCrawlingContext) -> None:
             """
             Télécharge une image de produit dans son sous-dossier.
-            Version agressive: accepte TOUTES les images, logging détaillé.
+            Avec validation des extensions et délai anti-détection.
             """
             img_url = context.response.url
             product_url = context.request.user_data.get("product_url", "")
@@ -540,6 +526,25 @@ class AliExpressImageSearchScraper:
             context.log.info(f"   ========================================")
 
             try:
+                # Déterminer l'extension et VALIDER
+                parsed = urlparse(img_url)
+                file_ext = os.path.splitext(parsed.path)[1].lower()
+
+                # VALIDATION: Vérifier que l'extension est valide
+                if file_ext not in VALID_SUFFIXES:
+                    context.log.warning(f"   ⚠️ Extension invalide: {file_ext} (autorisées: {VALID_SUFFIXES})")
+                    context.log.warning(f"   ⏭️ Image ignorée")
+                    await context.page.close()
+                    return
+
+                ext = file_ext if file_ext else '.jpg'
+                context.log.info(f"      ✅ Extension valide: {ext}")
+
+                # DÉLAI ALÉATOIRE pour éviter détection bot
+                delay = 1 + (rnd.random() * TEMPO_DELAY)
+                context.log.info(f"      ⏱️ Délai anti-détection: {delay:.2f}s")
+                await asyncio.sleep(delay)
+
                 # Créer le sous-dossier du produit
                 product_dir = self.images_dir / f"product_{product_num:03d}"
                 context.log.info(f"      Création dossier: {product_dir}")
@@ -552,14 +557,6 @@ class AliExpressImageSearchScraper:
                 self.product_image_counters[product_num] += 1
                 img_num = self.product_image_counters[product_num]
                 context.log.info(f"      Numéro d'image pour ce produit: {img_num}")
-
-                # Déterminer l'extension
-                ext = '.jpg'
-                parsed = urlparse(img_url)
-                file_ext = os.path.splitext(parsed.path)[1]
-                if file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
-                    ext = file_ext
-                context.log.info(f"      Extension: {ext}")
 
                 # Nom de fichier
                 filename = f"image_{img_num}{ext}"
