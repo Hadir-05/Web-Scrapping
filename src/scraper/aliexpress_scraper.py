@@ -409,13 +409,37 @@ class AliExpressImageSearchScraper:
                                 src = await img.get_attribute("data-src")
 
                             if src:
-                                # Nettoyer l'URL (supprimer les suffixes de miniatures)
-                                src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                                # Nettoyer l'URL (supprimer les suffixes de miniatures AliExpress)
+                                # Format observé: image.jpg_220x220q75.jpg_.avif
+                                src_clean = src
+
+                                # Supprimer les suffixes type _NNNxNNNqNN.jpg_.ext
+                                import re
+                                src_clean = re.sub(r'_\d+x\d+q?\d*\.jpg_\.(avif|webp|jpg|png)$', '', src_clean)
+
+                                # Supprimer les autres formats de miniatures
+                                src_clean = src_clean.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                                src_clean = src_clean.replace('_200x200', '').replace('_220x220', '').replace('_300x300', '')
+
+                                # Si on a enlevé l'extension, s'assurer qu'elle existe
+                                if not src_clean.endswith(('.jpg', '.jpeg', '.png', '.webp', '.avif')):
+                                    # Ajouter .jpg par défaut
+                                    if '.jpg' in src:
+                                        src_clean = src_clean + '.jpg'
+                                    elif '.png' in src:
+                                        src_clean = src_clean + '.png'
+                                    elif '.webp' in src:
+                                        src_clean = src_clean + '.webp'
+
+                                context.log.info(f"         Original: {src[:80]}...")
+                                context.log.info(f"         Nettoyé:  {src_clean[:80]}...")
 
                                 # Vérifier que c'est bien une image AliExpress
-                                if 'alicdn' in src_clean:
+                                if 'alicdn' in src_clean or 'aliexpress' in src_clean:
                                     img_links.append(src_clean)
-                                    context.log.info(f"         {idx}. {src_clean[:70]}...")
+                                    context.log.info(f"         ✅ Image {idx} ajoutée")
+                                else:
+                                    context.log.warning(f"         ⚠️ Image {idx} ignorée (pas AliExpress)")
                         except Exception as e:
                             context.log.warning(f"         Erreur image {idx}: {e}")
 
@@ -451,8 +475,18 @@ class AliExpressImageSearchScraper:
 
                                 for img in imgs[:3]:
                                     src = await img.get_attribute("src") or await img.get_attribute("data-src")
-                                    if src and 'alicdn' in src and src not in img_links:
-                                        src_clean = src.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                                    if src and ('alicdn' in src or 'aliexpress' in src) and src not in img_links:
+                                        # Même nettoyage que la méthode principale
+                                        import re
+                                        src_clean = re.sub(r'_\d+x\d+q?\d*\.jpg_\.(avif|webp|jpg|png)$', '', src)
+                                        src_clean = src_clean.replace('_50x50', '').replace('_100x100', '').replace('_150x150', '')
+                                        src_clean = src_clean.replace('_200x200', '').replace('_220x220', '').replace('_300x300', '')
+
+                                        # Restaurer extension si nécessaire
+                                        if not src_clean.endswith(('.jpg', '.jpeg', '.png', '.webp', '.avif')):
+                                            if '.jpg' in src:
+                                                src_clean = src_clean + '.jpg'
+
                                         img_links.append(src_clean)
 
                             except Exception:
