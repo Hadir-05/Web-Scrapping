@@ -289,30 +289,46 @@ class AliExpressImageSearchScraper:
                 context.log.info(f"   📝 Titre: {title[:50]}...")
 
                 # Prix - Plusieurs sélecteurs pour améliorer la détection
+                # Attendre que la page charge complètement
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                await asyncio.sleep(1)
+
                 price = "N/A"
                 price_selectors = [
+                    # Sélecteur exact fourni par l'utilisateur
+                    "span.price-default--current--F8OlYIo",
+                    "span[class*='price-default--current']",
+                    "span[class*='price--current']",
+                    "span[class*='price-default']",
+                    # Autres variantes
                     "span[class*='price--']",
                     "span[class*='Price']",
                     "div[class*='price'] span",
-                    "span[class*='uniform-banner']",
                     "span[data-spm-anchor-id*='price']",
-                    "div[class*='Product_Price']",
                     "span.product-price-value",
                     ".price-current",
+                    # Fallback large
+                    "span:has-text('€')",
+                    "span:has-text('$')",
                 ]
 
-                for selector in price_selectors:
+                context.log.info("   💰 Recherche du prix...")
+                for idx, selector in enumerate(price_selectors):
                     try:
-                        price_elem = await page.locator(selector).first.text_content(timeout=2000)
+                        context.log.info(f"      Essai sélecteur #{idx+1}: {selector}")
+                        price_elem = await page.locator(selector).first.text_content(timeout=3000)
                         if price_elem and price_elem.strip():
                             price = price_elem.strip()
-                            context.log.info(f"   💰 Prix trouvé avec {selector}: {price}")
+                            context.log.info(f"   ✅ Prix trouvé avec sélecteur #{idx+1} ({selector}): {price}")
                             break
-                    except:
+                        else:
+                            context.log.info(f"      Sélecteur trouvé mais vide")
+                    except Exception as e:
+                        context.log.info(f"      Sélecteur échoué: {str(e)[:50]}")
                         continue
 
                 if price == "N/A":
-                    context.log.warning("   ⚠️ Prix non trouvé")
+                    context.log.warning("   ⚠️ Prix non trouvé avec aucun sélecteur")
 
                 # Images produit
                 context.log.info("   🖼️ Extraction des images...")
@@ -320,29 +336,43 @@ class AliExpressImageSearchScraper:
                     "div[class*=slider] img, div[class*=image-view] img, img[class*='magnifier']"
                 ).all()
 
+                context.log.info(f"      Nombre d'éléments img trouvés: {len(product_imgs)}")
+
                 img_links = []
-                for pimg in product_imgs[:3]:  # Max 3 images par produit
+                for idx, pimg in enumerate(product_imgs[:3]):  # Max 3 images par produit
                     try:
                         src = await pimg.get_attribute("src")
+                        context.log.info(f"      Image #{idx+1}: {src[:80] if src else 'None'}...")
                         if src and 'alicdn' in src:
                             img_links.append(src)
-                    except:
+                            context.log.info(f"         ✅ Ajoutée à la liste")
+                        else:
+                            context.log.info(f"         ⚠️ Ignorée (pas alicdn ou None)")
+                    except Exception as e:
+                        context.log.info(f"      ⚠️ Erreur lecture src: {e}")
                         continue
 
-                context.log.info(f"   ✅ {len(img_links)} images trouvées")
+                context.log.info(f"   ✅ {len(img_links)} images valides trouvées")
 
                 # Ajouter les requêtes d'images (PRIORITÉ) avec le numéro de produit
-                for img_url in img_links:
-                    await request_queue.add_requests([
-                        Request.from_url(
-                            url=img_url,
-                            label="ITEM_IMG",
-                            user_data={
-                                "product_url": item_url,
-                                "product_num": current_product_num  # Passer le numéro de produit
-                            }
-                        )
-                    ], forefront=True)  # Priorité aux images
+                if len(img_links) > 0:
+                    context.log.info(f"   📤 Ajout de {len(img_links)} images à la queue de téléchargement...")
+                    for idx, img_url in enumerate(img_links):
+                        context.log.info(f"      Ajout image {idx+1}/{len(img_links)}: {img_url[:60]}...")
+                        await request_queue.add_requests([
+                            Request.from_url(
+                                url=img_url,
+                                label="ITEM_IMG",
+                                user_data={
+                                    "product_url": item_url,
+                                    "product_num": current_product_num  # Passer le numéro de produit
+                                }
+                            )
+                        ], forefront=True)  # Priorité aux images
+                        context.log.info(f"      ✅ Image {idx+1} ajoutée à la queue")
+                    context.log.info(f"   ✅ Toutes les images ajoutées à la queue")
+                else:
+                    context.log.warning(f"   ⚠️ Aucune image à télécharger pour ce produit!")
 
                 # Sauvegarder les données du produit
                 item_data = {
@@ -374,16 +404,24 @@ class AliExpressImageSearchScraper:
             product_url = context.request.user_data.get("product_url", "")
             product_num = context.request.user_data.get("product_num", 0)
 
+            context.log.info(f"   📥 DEBUT téléchargement image")
+            context.log.info(f"      URL: {img_url}")
+            context.log.info(f"      Product num: {product_num}")
+            context.log.info(f"      Product URL: {product_url}")
+
             try:
                 # Créer le sous-dossier du produit
                 product_dir = self.images_dir / f"product_{product_num:03d}"
+                context.log.info(f"      Création dossier: {product_dir}")
                 product_dir.mkdir(parents=True, exist_ok=True)
+                context.log.info(f"      ✅ Dossier créé/existe: {product_dir}")
 
                 # Incrémenter le compteur d'images pour ce produit
                 if product_num not in self.product_image_counters:
                     self.product_image_counters[product_num] = 0
                 self.product_image_counters[product_num] += 1
                 img_num = self.product_image_counters[product_num]
+                context.log.info(f"      Numéro d'image: {img_num}")
 
                 # Déterminer l'extension
                 ext = '.jpg'
@@ -391,18 +429,31 @@ class AliExpressImageSearchScraper:
                 file_ext = os.path.splitext(parsed.path)[1]
                 if file_ext in ['.jpg', '.jpeg', '.png', '.webp']:
                     ext = file_ext
+                context.log.info(f"      Extension: {ext}")
 
                 # Nom de fichier: image_1.jpg, image_2.jpg, image_3.jpg
                 filename = f"image_{img_num}{ext}"
                 filepath = product_dir / filename
+                context.log.info(f"      Chemin complet: {filepath}")
 
                 # Download
+                context.log.info(f"      Téléchargement depuis: {img_url}")
                 response = await context.page.request.get(img_url, timeout=10000)
-                if response.status == 200:
-                    with open(filepath, 'wb') as f:
-                        f.write(await response.body())
+                context.log.info(f"      Status HTTP: {response.status}")
 
-                    context.log.info(f"   📥 Image téléchargée: product_{product_num:03d}/{filename}")
+                if response.status == 200:
+                    body = await response.body()
+                    context.log.info(f"      Taille: {len(body)} bytes")
+
+                    with open(filepath, 'wb') as f:
+                        f.write(body)
+
+                    # Vérifier que le fichier existe
+                    if filepath.exists():
+                        actual_size = filepath.stat().st_size
+                        context.log.info(f"   ✅ Image téléchargée: product_{product_num:03d}/{filename} ({actual_size} bytes)")
+                    else:
+                        context.log.error(f"   ❌ Fichier non créé: {filepath}")
 
                     # Sauvegarder les métadonnées avec le chemin local
                     img_metadata = {
@@ -411,9 +462,14 @@ class AliExpressImageSearchScraper:
                         "local_path": str(filepath),  # IMPORTANT: Chemin local pour CLIP
                     }
                     await img_dataset.push_data(img_metadata)
+                    context.log.info(f"      ✅ Métadonnées sauvegardées")
+                else:
+                    context.log.error(f"   ❌ Status HTTP {response.status} pour {img_url}")
 
             except Exception as e:
                 context.log.error(f"   ❌ Erreur téléchargement image: {e}")
+                import traceback
+                context.log.error(f"   Traceback: {traceback.format_exc()}")
 
             await context.page.close()
 
