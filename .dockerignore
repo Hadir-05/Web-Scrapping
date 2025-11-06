@@ -1,0 +1,75 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+env/
+ENV/
+
+# PyInstaller
+build/
+dist/
+*.spec
+*.manifest
+*.exe
+*.app
+*.dmg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Output et résultats (seront montés en volumes)
+output/
+output_recherche*/
+storage/
+.crawlee/
+
+# Logs
+*.log
+
+# Playwright cache (sera installé dans le container)
+.playwright/
+
+# Documentation (pas nécessaire dans l'image)
+*.md
+!README.md
+CHANGEMENTS_RESUME.md
+DEPLOIEMENT_SECURISATION.md
+GUIDE_COMPILATION.md
+RESUME_FINAL.md
+README_UTILISATEUR.md
+
+# Scripts de build (pas nécessaires dans l'image)
+build_executable.py
+launcher.py
+debug_*.py
+
+# Docker files (pas besoin dans l'image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Temp files
+*.tmp
+*.bak
+*.swp
