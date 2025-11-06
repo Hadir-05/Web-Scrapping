@@ -34,8 +34,18 @@ ENV/
 
 # Output files
 output/
+output_recherche*/
 *.json
 !requirements.txt
+
+# PyInstaller
+build/
+dist/
+*.manifest
+*.exe
+*.app
+*.dmg
+!AliExpress_Scraper.spec
 
 # Crawlee storage
 storage/
