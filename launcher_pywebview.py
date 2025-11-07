@@ -111,7 +111,7 @@ def create_window(port: int):
     url = f"http://localhost:{port}"
     print(f"🖼️  Création de la fenêtre: {url}")
 
-    # Créer la fenêtre
+    # Créer la fenêtre avec configuration étendue pour Streamlit
     window = webview.create_window(
         title=APP_TITLE,
         url=url,
@@ -121,7 +121,11 @@ def create_window(port: int):
         fullscreen=False,
         min_size=(800, 600),
         background_color='#FFFFFF',
-        text_select=True
+        text_select=True,
+        # Activer JavaScript (nécessaire pour Streamlit)
+        js_api=None,
+        # Permettre l'accès aux ressources locales
+        allow_downloads=True,
     )
 
     return window
@@ -169,7 +173,8 @@ def main():
         create_window(port)
 
         # Démarrer PyWebView (bloquant jusqu'à fermeture de la fenêtre)
-        webview.start(debug=False)
+        # Mode debug activé pour voir les erreurs JavaScript de Streamlit
+        webview.start(debug=True, http_server=False)
 
         print("✅ Fenêtre fermée")
 
