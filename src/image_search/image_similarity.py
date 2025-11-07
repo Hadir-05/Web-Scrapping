@@ -16,7 +16,10 @@ try:
     CLIP_AVAILABLE = True
 except ImportError:
     CLIP_AVAILABLE = False
-    print("⚠️ CLIP not available, falling back to perceptual hashing")
+    try:
+        print("CLIP not available, falling back to perceptual hashing")
+    except:
+        pass  # Ignorer les erreurs d'encodage
     import imagehash
 
 
@@ -36,14 +39,26 @@ class ImageSimilaritySearch:
         self.use_clip = use_clip and CLIP_AVAILABLE
 
         if self.use_clip:
-            print("🎯 Utilisation de CLIP pour la similarité d'images")
+            self._safe_print("Utilisation de CLIP pour la similarite d'images")
             self.clip_model = None  # Sera initialisé lors de la première recherche
             self.image_embeddings = {}  # {image_path: embedding}
         else:
-            print("🔍 Utilisation du perceptual hashing pour la similarité")
+            self._safe_print("Utilisation du perceptual hashing pour la similarite")
             self.image_hashes = {}  # {image_path: hash}
 
         self.image_info = {}    # {image_path: metadata}
+
+    @staticmethod
+    def _safe_print(message: str):
+        """Print avec gestion des erreurs d'encodage Windows"""
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            # Fallback pour Windows avec encodage limité
+            try:
+                print(message.encode('ascii', 'ignore').decode('ascii'))
+            except:
+                pass  # Ignorer complètement si ça ne marche toujours pas
 
     def add_image(self, image_path: str, metadata: dict = None):
         """
@@ -86,7 +101,7 @@ class ImageSimilaritySearch:
             self.image_info[image_path] = metadata or {}
 
         except Exception as e:
-            print(f"❌ Erreur lors de l'ajout de l'image {image_path}: {e}")
+            self._safe_print(f"Erreur lors de l'ajout de l'image {image_path}: {e}")
             import traceback
             traceback.print_exc()
 

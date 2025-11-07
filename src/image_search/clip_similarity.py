@@ -9,13 +9,14 @@ import torch
 from PIL import Image
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from src.utils import safe_print
 
 try:
     import open_clip
     CLIP_AVAILABLE = True
 except ImportError:
     CLIP_AVAILABLE = False
-    print("⚠️ open_clip not available, install with: pip install open-clip-torch")
+    safe_print("open_clip not available, install with: pip install open-clip-torch")
 
 
 # ========= CONFIG =========
@@ -103,8 +104,8 @@ class CLIPSimilarityModel:
             model_name: Nom du modèle CLIP
             pretrained: Dataset de pré-entraînement
         """
-        print(f"🔧 Chargement du modèle CLIP: {model_name} ({pretrained})")
-        print(f"   Device: {DEVICE}")
+        safe_print(f"Chargement du modele CLIP: {model_name} ({pretrained})")
+        safe_print(f"   Device: {DEVICE}")
 
         self.clip_model, self.preprocess, self.tokenizer = load_clip_model(
             model_name=model_name,
@@ -116,10 +117,10 @@ class CLIPSimilarityModel:
         self.ref_feat = None
 
         if ref_img is not None:
-            print(f"   📸 Calcul de l'embedding de référence: {ref_img}")
+            safe_print(f"   Calcul de l'embedding de reference: {ref_img}")
             self.ref_feat = self.compute_features(ref_img)
 
-        print("✅ Modèle CLIP chargé avec succès")
+        safe_print("Modele CLIP charge avec succes")
 
     def compute_features(self, img_path: str) -> np.ndarray:
         """
@@ -212,7 +213,7 @@ class CLIPSimilarityModel:
                 else:
                     scores.append(0.0)
             except Exception as e:
-                print(f"⚠️ Erreur pour {img_path}: {e}")
+                safe_print(f"Erreur pour {img_path}: {e}")
                 scores.append(0.0)
 
         return scores
