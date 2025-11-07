@@ -1,0 +1,102 @@
+================================================================================
+                    ALIEXPRESS SCRAPER - DEMARRAGE RAPIDE
+================================================================================
+
+VERSION : 1.0.0
+DATE    : Novembre 2025
+
+================================================================================
+                         DEMARRAGE EN 3 ETAPES
+================================================================================
+
+ETAPE 1 : VERIFIER PYTHON
+--------------------------
+
+Python 3.10 ou superieur doit etre installe.
+
+Pour verifier :
+  - Ouvrir PowerShell ou Terminal
+  - Taper : python --version
+  - Vous devriez voir : Python 3.10.x ou superieur
+
+Si Python n'est PAS installe :
+  - Telecharger depuis : https://www.python.org/downloads/
+  - IMPORTANT : Cocher "Add Python to PATH" pendant l'installation
+
+
+ETAPE 2 : LANCER L'APPLICATION
+-------------------------------
+
+WINDOWS :
+  >>> Double-cliquer sur : Lancer_Application.bat
+
+MAC / LINUX :
+  >>> Ouvrir le terminal dans ce dossier
+  >>> Taper : ./Lancer_Application.sh
+
+
+ETAPE 3 : UTILISER L'APPLICATION
+---------------------------------
+
+1. Le navigateur s'ouvre automatiquement
+   (Sinon, ouvrir : http://localhost:8501)
+
+2. Uploader une image (JPG, PNG)
+
+3. Cliquer sur "Rechercher sur AliExpress"
+
+4. Attendre 1-3 minutes
+
+5. Voir les resultats et exporter si besoin
+
+
+================================================================================
+                             IMPORTANT
+================================================================================
+
+- NE PAS FERMER la fenetre noire (terminal) pendant l'utilisation
+- Pour arreter l'application : Fermer la fenetre noire
+- Les resultats sont sauvegardes dans output_recherche1/, output_recherche2/...
+
+
+================================================================================
+                          EN CAS DE PROBLEME
+================================================================================
+
+PROBLEME : "Python n'est pas reconnu"
+SOLUTION : Reinstaller Python en cochant "Add Python to PATH"
+
+PROBLEME : L'application ne demarre pas
+SOLUTION : Ouvrir PowerShell/Terminal dans ce dossier et taper :
+           pip install -r requirements.txt
+           playwright install chromium
+
+PROBLEME : "Le port 8501 est deja utilise"
+SOLUTION : Fermer toutes les fenetres de l'application et reessayer
+
+PROBLEME : La recherche ne retourne rien
+SOLUTION : Verifier votre connexion Internet et que Playwright est installe
+
+
+================================================================================
+                          DOCUMENTATION COMPLETE
+================================================================================
+
+Pour plus de details, voir :
+  - GUIDE_INSTALLATION_CLIENT.md    (Guide complet d'installation)
+  - README_CLIENT.txt                (Documentation utilisateur)
+
+
+================================================================================
+                              SUPPORT
+================================================================================
+
+Email : [votre-email@example.com]
+Tel   : [votre-numero]
+
+
+================================================================================
+
+          MERCI D'UTILISER ALIEXPRESS SCRAPER !
+
+================================================================================
