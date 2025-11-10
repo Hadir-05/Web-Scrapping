@@ -31,14 +31,16 @@ def check_python_version():
 def check_pyarmor():
     """Vérifier que PyArmor fonctionne"""
     try:
-        result = subprocess.run(["pyarmor", "--version"], capture_output=True, text=True)
-        if "7.7" in result.stdout:
+        # Essayer d'importer pyarmor (plus fiable que subprocess)
+        result = subprocess.run([sys.executable, "-m", "pyarmor", "--version"],
+                              capture_output=True, text=True)
+        if "7.7" in result.stdout or "7.7" in result.stderr:
             return True
         else:
             print("⚠️  PyArmor 7.x non détecté")
             return False
-    except FileNotFoundError:
-        print("❌ PyArmor n'est pas installé")
+    except Exception as e:
+        print(f"❌ Erreur lors de la vérification de PyArmor: {e}")
         return False
 
 def obfuscate_file(source_file, output_dir):
@@ -50,7 +52,7 @@ def obfuscate_file(source_file, output_dir):
 
         # Obfusquer
         result = subprocess.run([
-            "pyarmor", "obfuscate",
+            sys.executable, "-m", "pyarmor", "obfuscate",
             "--output", str(output_dir),
             "--recursive",
             str(source_file)
@@ -158,7 +160,7 @@ def main():
 
         # Obfusquer sur place
         result = subprocess.run([
-            "pyarmor", "obfuscate",
+            sys.executable, "-m", "pyarmor", "obfuscate",
             "--in-place",
             str(py_file)
         ], capture_output=True, text=True, timeout=30)
