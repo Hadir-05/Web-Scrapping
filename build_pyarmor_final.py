@@ -28,11 +28,21 @@ def check_python_version():
         return False
     return True
 
+def get_pyarmor_executable():
+    """Obtenir le chemin vers pyarmor.exe"""
+    # Dans un environnement virtuel, pyarmor.exe est dans Scripts/
+    venv_pyarmor = Path(sys.executable).parent / "pyarmor.exe"
+    if venv_pyarmor.exists():
+        return str(venv_pyarmor)
+
+    # Sinon essayer la commande globale
+    return "pyarmor"
+
 def check_pyarmor():
     """Vérifier que PyArmor fonctionne"""
     try:
-        # Essayer d'importer pyarmor (plus fiable que subprocess)
-        result = subprocess.run([sys.executable, "-m", "pyarmor", "--version"],
+        pyarmor_cmd = get_pyarmor_executable()
+        result = subprocess.run([pyarmor_cmd, "--version"],
                               capture_output=True, text=True)
         if "7.7" in result.stdout or "7.7" in result.stderr:
             return True
@@ -51,8 +61,9 @@ def obfuscate_file(source_file, output_dir):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Obfusquer
+        pyarmor_cmd = get_pyarmor_executable()
         result = subprocess.run([
-            sys.executable, "-m", "pyarmor", "obfuscate",
+            pyarmor_cmd, "obfuscate",
             "--output", str(output_dir),
             "--recursive",
             str(source_file)
@@ -159,8 +170,9 @@ def main():
         print(f"   {rel_path}...", end=" ", flush=True)
 
         # Obfusquer sur place
+        pyarmor_cmd = get_pyarmor_executable()
         result = subprocess.run([
-            sys.executable, "-m", "pyarmor", "obfuscate",
+            pyarmor_cmd, "obfuscate",
             "--in-place",
             str(py_file)
         ], capture_output=True, text=True, timeout=30)
