@@ -167,7 +167,7 @@ for py_file in src_output.rglob("*.py"):
             "--in-place",
             "--no-cross-protection",
             str(py_file)
-        ], check=True, capture_output=True, stderr=subprocess.DEVNULL)
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         obfuscated_count += 1
         print(f"      ✅ {py_file.relative_to(OUTPUT_DIR)}")
     except subprocess.CalledProcessError:
