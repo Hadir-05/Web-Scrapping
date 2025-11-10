@@ -1,0 +1,85 @@
+========================================================================
+                  GÉNÉRER LE PACKAGE CLIENT PROTÉGÉ
+========================================================================
+
+⚡ MÉTHODE RAPIDE (3 ÉTAPES)
+----------------------------
+
+1. INSTALLER PYARMOR 7.X
+
+   pip uninstall pyarmor -y
+   pip install pyarmor==7.7.4
+
+
+2. GÉNÉRER LE PACKAGE
+
+   python build_distribution_client.py
+
+
+3. RÉSULTAT
+
+   ✅ Dossier créé: PACKAGE_CLIENT/
+   ✅ ZIP créé: AliExpress_Scraper_v1.0.0_YYYYMMDD.zip
+
+
+📦 CE QUI EST GÉNÉRÉ
+--------------------
+
+Le package client contient:
+
+  ✅ Code obfusqué (non-lisible/non-modifiable)
+  ✅ Toutes les dépendances listées
+  ✅ Scripts de lancement (Windows/Linux/Mac)
+  ✅ Dossier RESULTATS/ pour sauvegardes
+  ✅ Documentation complète pour le client
+
+
+🧪 TESTER LE PACKAGE
+---------------------
+
+Avant de l'envoyer au client:
+
+   cd PACKAGE_CLIENT
+   python app.py
+
+Vérifier:
+  - L'application démarre
+  - Une recherche fonctionne
+  - Les résultats sont sauvegardés dans RESULTATS/
+
+
+📧 DISTRIBUER AU CLIENT
+------------------------
+
+Envoyer le fichier ZIP par:
+  - Email (si < 25 MB)
+  - WeTransfer / Google Drive (si > 25 MB)
+  - Clé USB
+
+
+✅ AVANTAGES POUR LE CLIENT
+----------------------------
+
+  ✅ Installation simple (3 étapes)
+  ✅ Code protégé (propriété intellectuelle)
+  ✅ Documentation complète
+  ✅ Dossier RESULTATS/ organisé
+  ✅ Prêt pour utilisation professionnelle
+
+
+📖 GUIDE COMPLET
+-----------------
+
+Pour plus de détails, consulter:
+  → GENERER_PACKAGE_CLIENT.md
+
+
+🆘 PROBLÈMES ?
+--------------
+
+1. Vérifier PyArmor: pyarmor --version (doit être 7.x)
+2. Consulter: OBFUSCATION_MANUELLE.md
+3. Consulter: GENERER_PACKAGE_CLIENT.md
+
+
+========================================================================
