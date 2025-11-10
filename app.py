@@ -31,32 +31,21 @@ st.set_page_config(
 
 def get_next_output_dir():
     """Générer le prochain nom de dossier unique pour la recherche"""
-    base_dir = Path(".")
+    # Créer un dossier RESULTATS s'il n'existe pas
+    base_dir = Path("RESULTATS")
+    base_dir.mkdir(parents=True, exist_ok=True)
 
-    # Chercher tous les dossiers output_recherche*
-    existing_dirs = list(base_dir.glob("output_recherche*"))
+    # Créer un dossier avec timestamp unique
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_dir = base_dir / f"recherche_{timestamp}"
 
-    if not existing_dirs:
-        return "output_recherche1"
+    # Si le dossier existe déjà (rare mais possible), ajouter un suffixe
+    counter = 1
+    while output_dir.exists():
+        output_dir = base_dir / f"recherche_{timestamp}_{counter}"
+        counter += 1
 
-    # Extraire les numéros
-    numbers = []
-    for dir_path in existing_dirs:
-        name = dir_path.name
-        # Extraire le numéro après "output_recherche"
-        try:
-            num = int(name.replace("output_recherche", ""))
-            numbers.append(num)
-        except ValueError:
-            continue
-
-    # Prochain numéro
-    if numbers:
-        next_num = max(numbers) + 1
-    else:
-        next_num = 1
-
-    return f"output_recherche{next_num}"
+    return str(output_dir)
 
 
 def init_session_state():
@@ -279,21 +268,23 @@ def main():
         st.caption("Un nouveau dossier sera créé automatiquement à chaque recherche")
 
         # Liste des recherches précédentes
-        existing_searches = sorted(Path(".").glob("output_recherche*"), reverse=True)
-        if existing_searches:
-            st.markdown("### 📂 Recherches Précédentes")
-            for search_dir in existing_searches[:5]:  # Afficher les 5 dernières
-                # Compter les produits
-                product_file = search_dir / "product_data.json"
-                count = 0
-                if product_file.exists():
-                    try:
-                        with open(product_file, 'r', encoding='utf-8') as f:
-                            products = json.load(f)
-                            count = len(products)
-                    except:
-                        pass
-                st.caption(f"📦 {search_dir.name} ({count} produits)")
+        resultats_dir = Path("RESULTATS")
+        if resultats_dir.exists():
+            existing_searches = sorted(resultats_dir.glob("recherche_*"), reverse=True)
+            if existing_searches:
+                st.markdown("### 📂 Recherches Précédentes")
+                for search_dir in existing_searches[:5]:  # Afficher les 5 dernières
+                    # Compter les produits
+                    product_file = search_dir / "product_data.json"
+                    count = 0
+                    if product_file.exists():
+                        try:
+                            with open(product_file, 'r', encoding='utf-8') as f:
+                                products = json.load(f)
+                                count = len(products)
+                        except:
+                            pass
+                    st.caption(f"📦 {search_dir.name} ({count} produits)")
 
         max_results = st.slider(
             "Nombre max de produits",

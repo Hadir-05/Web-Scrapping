@@ -96,9 +96,26 @@ L'APPLICATION SE COMPOSE DE 3 ONGLETS :
 3. EXPORTER
    --------
    - Télécharger les résultats en format :
-     * CSV (Excel)
-     * JSON (données brutes)
-   - Les fichiers sont sauvegardés dans le dossier de l'application
+     * Excel (.xlsx) avec produits sélectionnés
+     * JSON (données brutes dans le dossier de recherche)
+   - Les fichiers sont sauvegardés automatiquement
+
+📁 DOSSIER DES RESULTATS :
+-------------------------
+
+Tous les résultats sont sauvegardés dans le dossier :
+   RESULTATS/
+
+Chaque recherche crée un nouveau dossier avec la date :
+   RESULTATS/recherche_2025-11-10_14-30-25/
+
+Dans chaque dossier vous trouverez :
+   ✓ product_data.json     - Données des produits
+   ✓ image_metadata.json   - Informations sur les images
+   ✓ images/               - Toutes les images téléchargées
+   ✓ *.xlsx (si exporté)   - Fichier Excel avec produits sélectionnés
+
+Consultez RESULTATS/README.txt pour plus de détails.
 
 
 CONSEILS D'UTILISATION :
@@ -108,6 +125,7 @@ CONSEILS D'UTILISATION :
 ✓ Les recherches peuvent prendre 1-3 minutes selon le nombre de résultats
 ✓ Ne fermez pas la fenêtre pendant une recherche en cours
 ✓ Les résultats sont triés par similarité (meilleur en premier)
+✓ Tous vos résultats sont sauvegardés dans le dossier RESULTATS/
 
 
 ================================================================================
